@@ -2,10 +2,12 @@ import { arcane } from "./arcane/design";
 import { arcaneRelics } from "./arcane/deck";
 import { playingSample } from "./playing-card/deck";
 import { playingCard } from "./playing-card/design";
+import { halloweenDeeds } from "./portal/deck";
+import { portal } from "./portal/design";
 import type { Deck, Design } from "../model/types";
 
-export const designs: Design[] = [arcane, playingCard];
-export const decks: Deck[] = [arcaneRelics, playingSample];
+export const designs: Design[] = [portal, arcane, playingCard];
+export const decks: Deck[] = [halloweenDeeds, arcaneRelics, playingSample];
 
 export function findDesign(id: string): Design | undefined {
   return designs.find((design) => design.id === id);

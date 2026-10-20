@@ -68,9 +68,13 @@ export async function appendOps(svg: SVGSVGElement, ops: DrawOp[], originX = 0, 
       node.setAttribute("r", String(op.r));
       paint(node, op);
       group.append(node);
-    } else if (op.t === "polygon") {
-      const node = el("polygon");
+    } else if (op.t === "polygon" || op.t === "polyline") {
+      const node = el(op.t === "polygon" ? "polygon" : "polyline");
       node.setAttribute("points", op.points.map((point) => point.join(",")).join(" "));
+      if (op.t === "polyline") {
+        node.setAttribute("stroke-linecap", "round");
+        node.setAttribute("stroke-linejoin", "round");
+      }
       paint(node, op);
       group.append(node);
     } else if (op.t === "text") {

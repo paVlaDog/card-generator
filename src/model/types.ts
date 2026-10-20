@@ -17,6 +17,7 @@ export type Paint = { fill?: string; stroke?: string; sw?: number };
 export type DrawOp =
   | ({ t: "rect"; box: Box; radius?: number } & Paint)
   | ({ t: "polygon"; points: Array<[number, number]> } & Paint)
+  | ({ t: "polyline"; points: Array<[number, number]> } & Paint)
   | ({ t: "circle"; cx: number; cy: number; r: number } & Paint)
   | { t: "image"; path: string; box: Box; fit: "cover" | "contain" }
   | {
@@ -39,6 +40,7 @@ export type Recorder = {
   rect(box: Box, style?: Paint & { radius?: number }): void;
   circle(cx: number, cy: number, r: number, style?: Paint): void;
   polygon(points: Array<[number, number]>, style?: Paint): void;
+  polyline(points: Array<[number, number]>, style?: Paint): void;
   image(path: string, box: Box, fit?: "cover" | "contain"): void;
   text(
     value: string,

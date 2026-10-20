@@ -135,6 +135,10 @@ export function createRecorder(measurer: Measurer): Recorder {
     polygon(points, style = {}) {
       ops.push({ t: "polygon", points: mapPoints(matrix, points), ...style });
     },
+    polyline(points, style = {}) {
+      if (points.length < 2) return;
+      ops.push({ t: "polyline", points: mapPoints(matrix, points), ...style });
+    },
     image(path, box, fit = "cover") {
       if (!path) return;
       const corners = mapPoints(matrix, [

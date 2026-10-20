@@ -52,18 +52,13 @@ function copiesOf(deck: Deck): number {
   return deck.cards.reduce((sum, card) => sum + card.count, 0);
 }
 
-function logo(): SVGSVGElement {
-  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-  svg.setAttribute("viewBox", "0 0 24 24");
-  svg.setAttribute("class", "logo");
-  svg.setAttribute("aria-hidden", "true");
-  const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-  path.setAttribute("d", "M3 3h6M3 3v6M21 3h-6M21 3v6M3 21h6M3 21v-6M21 21h-6M21 21v-6");
-  path.setAttribute("fill", "none");
-  path.setAttribute("stroke", "#c4342d");
-  path.setAttribute("stroke-width", "1.7");
-  svg.append(path);
-  return svg;
+function logo(): HTMLImageElement {
+  const img = h("img", "logo");
+  img.src = `${import.meta.env.BASE_URL}favicon.svg`;
+  img.alt = "";
+  img.width = 28;
+  img.height = 28;
+  return img;
 }
 
 function syncDeck(route: Route) {
@@ -103,9 +98,9 @@ async function homeView(): Promise<HTMLElement> {
   const page = h("div", "page");
   const top = h("div", "top");
   const brand = h("div", "brand");
-  brand.append(logo(), h("h1", "", "Спуск"));
+  brand.append(logo(), h("h1", "", "Хранилище настолок"));
   top.append(brand);
-  page.append(top, h("p", "lead", "Карты на лист с вылетами и метками реза, чтобы типография нарезала их гильотиной."));
+  page.append(top, h("p", "lead", "Склад карт с удобным разбиением на листы для печати."));
   const grid = h("div", "designs");
   for (const design of designs) {
     const link = h("a", "design");

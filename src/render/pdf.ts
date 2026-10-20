@@ -59,7 +59,7 @@ async function imageFor(session: Session, path: string): Promise<PDFImage | null
 async function paintOps(session: Session, page: PDFPage, ops: DrawOp[], originX: number, originY: number) {
   const pageH = page.getHeight();
   for (const op of ops) {
-    if (op.t === "rect" || op.t === "polygon" || op.t === "circle") {
+    if (op.t === "rect" || op.t === "polygon" || op.t === "polyline" || op.t === "circle") {
       const fill = op.fill ? colorOf(op.fill) : undefined;
       const stroke = op.stroke ? colorOf(op.stroke) : undefined;
       const sw = op.stroke ? (op.sw ?? 0.2) * MM_TO_PT : undefined;
@@ -90,7 +90,7 @@ async function paintOps(session: Session, page: PDFPage, ops: DrawOp[], originX:
               const y = pageH - (originY + point[1]) * MM_TO_PT;
               return `${index === 0 ? "M" : "L"}${x.toFixed(3)},${y.toFixed(3)}`;
             })
-            .join(" ") + " Z";
+            .join(" ") + (op.t === "polygon" ? " Z" : "");
         page.drawSvgPath(d, { x: 0, y: 0, color: fill, borderColor: stroke, borderWidth: sw });
       }
     } else if (op.t === "text") {
