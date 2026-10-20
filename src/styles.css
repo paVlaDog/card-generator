@@ -1,0 +1,227 @@
+:root {
+  --paper: #e6dfd2;
+  --sheet: #f7f3eb;
+  --ink: #1c1915;
+  --muted: #6d665c;
+  --line: #d2c9b8;
+  --red: #c4342d;
+  --mat: #cfc6b6;
+  color: var(--ink);
+  background: var(--paper);
+  font-family: "PT Sans", "Segoe UI", sans-serif;
+  font-size: 16px;
+  line-height: 1.4;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  min-height: 100vh;
+}
+
+button, a, select { font: inherit; color: inherit; }
+
+button, select {
+  background: var(--sheet);
+  border: 1px solid var(--ink);
+  padding: 7px 12px;
+  cursor: pointer;
+}
+
+button:disabled, select:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+button.primary {
+  background: var(--ink);
+  color: var(--sheet);
+}
+
+button.pressed, a.pressed {
+  background: var(--ink);
+  color: var(--sheet);
+}
+
+:focus-visible {
+  outline: 2px solid var(--red);
+  outline-offset: 2px;
+}
+
+.page { min-height: 100vh; }
+
+.top {
+  display: flex;
+  align-items: baseline;
+  justify-content: flex-start;
+  gap: 28px;
+  padding: 22px 28px 8px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+}
+
+.brand h1, .top h1 {
+  margin: 0;
+  font-family: "PT Serif", Georgia, serif;
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.logo { width: 22px; height: 22px; display: block; }
+
+.lead, .quiet, .meta, .caption, .status {
+  color: var(--muted);
+  margin: 0;
+}
+
+.lead { max-width: 42rem; padding: 0 28px 8px; }
+
+.crumb {
+  color: var(--muted);
+  text-decoration: none;
+  border-bottom: 1px solid var(--line);
+}
+
+.designs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  gap: 16px;
+  padding: 16px 28px 40px;
+}
+
+.design {
+  display: grid;
+  grid-template-columns: 148px 1fr;
+  gap: 16px;
+  align-items: center;
+  padding: 14px;
+  text-decoration: none;
+  background: var(--sheet);
+  border: 1px solid var(--line);
+}
+
+.design:hover { border-color: var(--ink); }
+
+.design h2 {
+  margin: 0 0 6px;
+  font-family: "PT Serif", Georgia, serif;
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.preview, .stage {
+  background: var(--mat);
+  display: grid;
+  place-items: center;
+}
+
+.preview { height: 220px; }
+.preview svg { height: 190px; width: auto; }
+
+.stage {
+  margin: 0 28px 8px;
+  min-height: 360px;
+  padding: 18px;
+}
+
+.stage.cards svg { height: min(72vh, 680px); width: auto; }
+.stage.sheets svg { max-width: 100%; max-height: calc(100vh - 240px); width: auto; height: auto; }
+
+.toolbar, .downloads {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  align-items: center;
+  padding: 0 28px 12px;
+}
+
+.segment { display: inline-flex; }
+.segment a, .segment button {
+  display: inline-block;
+  text-decoration: none;
+  background: var(--sheet);
+  border: 1px solid var(--ink);
+  padding: 7px 12px;
+  margin: 0;
+  line-height: 1.2;
+}
+.segment a + a, .segment button + button { margin-left: -1px; }
+.segment a.pressed, .segment button.pressed {
+  background: var(--ink);
+  color: var(--sheet);
+}
+
+.pager { display: inline-flex; align-items: center; gap: 8px; }
+.pager span { min-width: 7.5rem; text-align: center; }
+
+.caption, .status { padding: 0 28px 28px; }
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(28, 25, 21, 0.48);
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.dialog {
+  width: min(440px, 100%);
+  background: var(--sheet);
+  border: 1px solid var(--ink);
+  box-shadow: 8px 8px 0 var(--ink);
+  padding: 18px;
+}
+
+.dialog h2 {
+  margin: 0 0 4px;
+  font-family: "PT Serif", Georgia, serif;
+  font-size: 24px;
+}
+
+.deck-list { display: flex; flex-direction: column; margin: 14px 0; }
+
+.deck-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: baseline;
+  text-decoration: none;
+  padding: 10px 2px;
+  border-top: 1px solid var(--line);
+}
+
+.deck-row:hover .deck-name { border-bottom: 1px solid var(--ink); }
+
+.dialog-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+button.wide { min-width: 11rem; }
+
+.text-link { color: var(--muted); }
+
+.title-block h1 {
+  font-family: "PT Serif", Georgia, serif;
+  font-size: 26px;
+  margin: 0;
+}
+
+.title-block p { margin: 2px 0 0; color: var(--muted); }
+
+@media (max-width: 720px) {
+  .top, .lead, .designs, .toolbar, .downloads, .caption, .status, .stage { padding-left: 16px; padding-right: 16px; }
+  .designs { grid-template-columns: 1fr; }
+  .design { grid-template-columns: 110px 1fr; }
+  .stage { margin-left: 16px; margin-right: 16px; }
+}
