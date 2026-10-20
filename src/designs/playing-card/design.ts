@@ -163,7 +163,7 @@ function drawBack(pen: Recorder, values: Record<string, string>) {
 
 export const playingCard: Design = {
   id: "playing-card",
-  title: "Игральная карта",
+  title: "Игральная карта (пример)",
   description: "Номинал и масть. Пипки собираются по номиналу, у валета, дамы и короля — вензель. Рубашка общая на колоду.",
   trim: { w: TRIM_W, h: TRIM_H },
   bleed: BLEED,

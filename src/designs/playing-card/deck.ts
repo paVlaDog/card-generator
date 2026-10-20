@@ -3,7 +3,7 @@ import type { Deck } from "../../model/types";
 export const playingSample: Deck = {
   id: "sample",
   designId: "playing-card",
-  title: "Пробная колода (пример)",
+  title: "Основная",
   back: { label: "ПРОБА" },
   cards: ([
     ["as", "A♠", "A", "♠", 2],

@@ -12,7 +12,7 @@ function card(
 export const halloweenDeeds: Deck = {
   id: "deeds",
   designId: "portal",
-  title: "Хэллоуин 2026",
+  title: "Основная",
   back: { label: "ХЭЛЛОУИН" },
   cards: [
     card(

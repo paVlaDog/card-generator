@@ -3,7 +3,7 @@ import type { Deck } from "../../model/types";
 export const arcaneRelics: Deck = {
   id: "relics",
   designId: "arcane",
-  title: "Реликвии (пример)",
+  title: "Основная",
   back: { label: "РЕЛИКВИИ" },
   cards: [
     {

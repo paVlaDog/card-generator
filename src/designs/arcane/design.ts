@@ -79,7 +79,7 @@ function drawBack(pen: Recorder, values: Record<string, string>) {
 
 export const arcane: Design = {
   id: "arcane",
-  title: "Колдовская карта",
+  title: "Колдовская карта (пример)",
   description: "Иллюстрация, название, тип и текст правила. Рубашка общая на колоду.",
   trim: { w: TRIM_W, h: TRIM_H },
   bleed: BLEED,

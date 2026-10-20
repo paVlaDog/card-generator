@@ -217,7 +217,7 @@ function drawBack(pen: Recorder, values: Record<string, string>) {
 
 export const portal: Design = {
   id: "portal",
-  title: "Портал",
+  title: "Хэллоуин 2026",
   description: "Карта действия на хэллоуин: тип, название и правило. Тёмное поле и серебряные завитки.",
   trim: { w: TRIM_W, h: TRIM_H },
   bleed: BLEED,
