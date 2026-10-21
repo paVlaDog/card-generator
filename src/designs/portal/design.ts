@@ -1,5 +1,4 @@
-import type { Recorder } from "../../model/types";
-import type { Design } from "../../model/types";
+import { MAIN_TYPE, type Design, type Recorder } from "../../model/types";
 
 const GROUND = "#12080c";
 const SILVER = "#d5dbe4";
@@ -222,6 +221,8 @@ export const portal: Design = {
   trim: { w: TRIM_W, h: TRIM_H },
   bleed: BLEED,
   backMode: "shared",
+  types: [MAIN_TYPE],
+  images: [],
   fields: {
     front: [
       { id: "kind", kind: "text", name: "Тип", required: true, maxLength: 18 },

@@ -1,4 +1,4 @@
-import type { Design, Recorder } from "../../model/types";
+import { MAIN_TYPE, type Design, type Recorder } from "../../model/types";
 
 const CREAM = "#f4efe4";
 const INK = "#241c16";
@@ -84,6 +84,8 @@ export const arcane: Design = {
   trim: { w: TRIM_W, h: TRIM_H },
   bleed: BLEED,
   backMode: "shared",
+  types: [MAIN_TYPE],
+  images: [],
   fields: {
     front: [
       { id: "art", kind: "image", name: "Иллюстрация", required: true },

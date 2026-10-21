@@ -1,5 +1,5 @@
 import { decksFor, designs, findDeck, findDesign } from "../designs";
-import { faceValues, type Deck, type Design, type FaceId, type Measurer } from "../model/types";
+import { cardsOfType, faceValues, type Deck, type Design, type FaceId, type Measurer } from "../model/types";
 import { expandCounts, placements, sheetCount } from "../print/impose";
 import { gridFor, SHEETS, sheetById, type SheetFormat } from "../print/spec";
 import { cardSvg, sheetSvg } from "../render/svg";
@@ -17,6 +17,7 @@ type State = {
   busy: string | null;
   error: string | null;
   deckKey: string | null;
+  typeId: string | null;
 };
 
 const state: State = {
@@ -27,6 +28,7 @@ const state: State = {
   busy: null,
   error: null,
   deckKey: null,
+  typeId: null,
 };
 
 let app: HTMLElement;
@@ -52,6 +54,24 @@ function copiesOf(deck: Deck): number {
   return deck.cards.reduce((sum, card) => sum + card.count, 0);
 }
 
+function deckMeta(design: Design, deck: Deck): string {
+  const bits = [
+    plural(deck.cards.length, "карта", "карты", "карт"),
+    plural(copiesOf(deck), "экземпляр", "экземпляра", "экземпляров"),
+  ];
+  if (design.types.length > 1) bits.push(plural(design.types.length, "тип", "типа", "типов"));
+  return bits.join(" · ");
+}
+
+function activeType(design: Design): string {
+  if (state.typeId && design.types.some((type) => type.id === state.typeId)) return state.typeId;
+  return design.types[0].id;
+}
+
+function scopeDeck(deck: Deck, typeId: string): Deck {
+  return { ...deck, cards: cardsOfType(deck, typeId) };
+}
+
 function logo(): HTMLImageElement {
   const img = h("img", "logo");
   img.src = `${import.meta.env.BASE_URL}favicon.svg`;
@@ -68,6 +88,7 @@ function syncDeck(route: Route) {
   state.cardIndex = 0;
   state.sheetIndex = 0;
   state.face = "front";
+  state.typeId = null;
   state.error = null;
 }
 
@@ -110,7 +131,9 @@ async function homeView(): Promise<HTMLElement> {
     if (deck) frame.append(await cardSvg(design, "front", deck.cards[0].front, measurer));
     const copy = h("div");
     copy.append(h("h2", "", design.title), h("p", "", design.description));
-    copy.append(h("p", "meta", plural(decksFor(design.id).length, "колода", "колоды", "колод")));
+    const bits = [plural(decksFor(design.id).length, "колода", "колоды", "колод")];
+    if (design.types.length > 1) bits.push(plural(design.types.length, "тип", "типа", "типов"));
+    copy.append(h("p", "meta", bits.join(" · ")));
     link.append(frame, copy);
     grid.append(link);
   }
@@ -138,7 +161,7 @@ function dialog(design: Design): HTMLElement {
     link.href = deckHref(design.id, deck.id);
     link.append(
       h("span", "deck-name", deck.title),
-      h("span", "meta", `${plural(deck.cards.length, "карта", "карты", "карт")} · ${plural(copiesOf(deck), "экземпляр", "экземпляра", "экземпляров")}`),
+      h("span", "meta", deckMeta(design, deck)),
     );
     list.append(link);
   }
@@ -168,13 +191,18 @@ async function deckView(designId: string, deckId: string, mode: Mode): Promise<H
   const design = findDesign(designId);
   const deck = findDeck(designId, deckId);
   if (!design || !deck) return missing("Такой колоды нет.");
+  const typeId = activeType(design);
+  state.typeId = typeId;
+  const scope = scopeDeck(deck, typeId);
+  const typeBack = design.backMode === "shared" && Boolean(deck.backs?.[typeId]);
+  const showBack = design.backMode === "per-card" || typeBack;
+  if (!showBack) state.face = "front";
   const sheet = sheetOf();
   const grid = gridFor(design.trim, design.bleed, sheet);
-  const expanded = expandCounts(deck.cards);
+  const expanded = expandCounts(scope.cards);
   const sheets = sheetCount(expanded.length, grid.cols, grid.rows);
-  state.cardIndex = Math.min(state.cardIndex, Math.max(0, deck.cards.length - 1));
+  state.cardIndex = Math.min(state.cardIndex, Math.max(0, scope.cards.length - 1));
   state.sheetIndex = Math.min(state.sheetIndex, Math.max(0, sheets - 1));
-  if (design.backMode === "none") state.face = "front";
 
   const page = h("div", "page");
   const top = h("div", "top");
@@ -186,6 +214,18 @@ async function deckView(designId: string, deckId: string, mode: Mode): Promise<H
   page.append(top);
 
   const tools = h("div", "toolbar");
+  if (design.types.length > 1) {
+    tools.append(buttonPair(
+      design.types.map((type) => [type.id, type.title]),
+      typeId,
+      (value) => {
+        state.typeId = value;
+        state.cardIndex = 0;
+        state.sheetIndex = 0;
+        state.face = "front";
+      },
+    ));
+  }
   tools.append(segment(
     [
       ["cards", "Карты", deckHref(designId, deckId, "cards")],
@@ -193,7 +233,7 @@ async function deckView(designId: string, deckId: string, mode: Mode): Promise<H
     ],
     mode,
   ));
-  if (design.backMode !== "none") {
+  if (showBack) {
     tools.append(buttonPair(
       [
         ["front", "Лицо"],
@@ -201,7 +241,7 @@ async function deckView(designId: string, deckId: string, mode: Mode): Promise<H
       ],
       state.face,
       (value) => {
-        state.face = value;
+        state.face = value as FaceId;
       },
     ));
   }
@@ -222,7 +262,7 @@ async function deckView(designId: string, deckId: string, mode: Mode): Promise<H
   tools.append(format);
 
   if (mode === "cards") {
-    tools.append(pager(state.cardIndex, deck.cards.length, "Карта", () => {
+    tools.append(pager(state.cardIndex, scope.cards.length, "Карта", () => {
       state.cardIndex -= 1;
     }, () => {
       state.cardIndex += 1;
@@ -237,19 +277,24 @@ async function deckView(designId: string, deckId: string, mode: Mode): Promise<H
   page.append(tools);
 
   const downloads = h("div", "downloads");
+  const ready = scope.cards.length > 0 ? undefined : "disabled";
   downloads.append(
-    action("Скачать карту", () => downloadCard(design, deck), "primary"),
-    action("Скачать лист", () => downloadSheet(design, deck), sheets ? "primary" : "disabled"),
-    action("Все карты", () => downloadAllCards(design, deck)),
-    action("Все листы", () => downloadAllSheets(design, deck), sheets ? undefined : "disabled"),
+    action("Скачать карту", () => downloadCard(design, scope), ready ?? "primary"),
+    action("Скачать лист", () => downloadSheet(design, scope), sheets ? "primary" : "disabled"),
+    action("Все карты", () => downloadAllCards(design, scope), ready),
+    action("Все листы", () => downloadAllSheets(design, scope), sheets ? undefined : "disabled"),
   );
   if (state.busy) downloads.append(h("span", "status", state.busy));
   page.append(downloads);
 
   const stage = h("div", `stage ${mode}`);
-  if (mode === "cards") {
-    const card = deck.cards[state.cardIndex];
-    const values = faceValues(design, deck, card, state.face) ?? card.front;
+  if (scope.cards.length === 0) {
+    const typeTitle = design.types.find((type) => type.id === typeId)?.title ?? "этом типе";
+    stage.append(h("p", "", `В типе «${typeTitle}» пока нет карт.`));
+    page.append(stage);
+  } else if (mode === "cards") {
+    const card = scope.cards[state.cardIndex];
+    const values = faceValues(design, scope, card, state.face) ?? card.front;
     stage.append(await cardSvg(design, state.face, values, measurer));
     page.append(stage, h("p", "caption", `${card.title} · ×${card.count}. Красная линия — рез, поле вокруг неё — вылет ${design.bleed} мм. В PDF вместо линии стоят метки.`));
   } else if (!sheets) {
@@ -257,7 +302,7 @@ async function deckView(designId: string, deckId: string, mode: Mode): Promise<H
     page.append(stage);
   } else {
     const placed = placements(expanded.length, grid.cols, grid.rows, state.sheetIndex, state.face).flatMap((item) => {
-      const values = faceValues(design, deck, expanded[item.cardIndex], state.face);
+      const values = faceValues(design, scope, expanded[item.cardIndex], state.face);
       return values ? [{ col: item.col, row: item.row, values }] : [];
     });
     stage.append(await sheetSvg(design, measurer, grid, sheet, placed, state.face, state.sheetIndex, sheets));
@@ -277,7 +322,7 @@ function segment(items: Array<[Mode, string, string]>, current: Mode): HTMLEleme
   return wrap;
 }
 
-function buttonPair(items: Array<[FaceId, string]>, current: FaceId, choose: (value: FaceId) => void): HTMLElement {
+function buttonPair(items: Array<[string, string]>, current: string, choose: (value: string) => void): HTMLElement {
   const wrap = h("div", "segment");
   for (const [id, label] of items) {
     const button = h("button", id === current ? "pressed" : "", label);
@@ -323,24 +368,31 @@ function action(label: string, run: () => void, kind?: string): HTMLButtonElemen
 
 async function downloadCard(design: Design, deck: Deck) {
   const card = deck.cards[state.cardIndex];
+  if (!card) return;
   await run("Собираю PDF карты…", cardFileName(deck.id, card), () => pdfCard(measurer, design, card, deck, state.face));
 }
 
 async function downloadSheet(design: Design, deck: Deck) {
   const sheet = sheetOf();
   const side = state.face === "front" ? "lico" : "oborot";
-  await run("Собираю PDF листа…", `${deck.id}-${sheet.id}-${state.sheetIndex + 1}-${side}.pdf`, () =>
+  await run("Собираю PDF листа…", `${fileStem(design, deck)}-${sheet.id}-${state.sheetIndex + 1}-${side}.pdf`, () =>
     pdfSheet(measurer, design, deck, sheet, state.sheetIndex, state.face),
   );
 }
 
 async function downloadAllCards(design: Design, deck: Deck) {
-  await run("Собираю PDF всех карт…", `${deck.id}-karty.pdf`, () => pdfAllCards(measurer, design, deck));
+  await run("Собираю PDF всех карт…", `${fileStem(design, deck)}-karty.pdf`, () => pdfAllCards(measurer, design, deck));
 }
 
 async function downloadAllSheets(design: Design, deck: Deck) {
   const sheet = sheetOf();
-  await run("Собираю PDF всех листов…", `${deck.id}-listy-${sheet.id}.pdf`, () => pdfAllSheets(measurer, design, deck, sheet));
+  await run("Собираю PDF всех листов…", `${fileStem(design, deck)}-listy-${sheet.id}.pdf`, () => pdfAllSheets(measurer, design, deck, sheet));
+}
+
+function fileStem(design: Design, deck: Deck): string {
+  const typeId = deck.cards[0]?.typeId;
+  if (design.types.length > 1 && typeId) return `${deck.id}-${typeId}`;
+  return deck.id;
 }
 
 async function run(label: string, filename: string, build: () => Promise<Uint8Array>) {

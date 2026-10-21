@@ -6,14 +6,14 @@ function card(
   kind: string,
   rules: string,
 ): Deck["cards"][number] {
-  return { id, title, count: 1, front: { kind, title, rules } };
+  return { id, typeId: "main", title, count: 1, front: { kind, title, rules } };
 }
 
 export const halloweenDeeds: Deck = {
   id: "deeds",
   designId: "portal",
   title: "Основная",
-  back: { label: "ХЭЛЛОУИН" },
+  backs: { main: { label: "ХЭЛЛОУИН" } },
   cards: [
     card(
       "chalice",

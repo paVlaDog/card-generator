@@ -1,4 +1,4 @@
-import type { Design, Recorder } from "../../model/types";
+import { MAIN_TYPE, type Design, type Recorder } from "../../model/types";
 
 const CREAM = "#f6f1e6";
 const INK = "#1c1915";
@@ -168,6 +168,8 @@ export const playingCard: Design = {
   trim: { w: TRIM_W, h: TRIM_H },
   bleed: BLEED,
   backMode: "shared",
+  types: [MAIN_TYPE],
+  images: [],
   fields: {
     front: [
       { id: "rank", kind: "text", name: "Номинал", required: true, maxLength: 2 },

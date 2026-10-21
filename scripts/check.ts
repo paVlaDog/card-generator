@@ -41,6 +41,20 @@ for (const design of designs) {
   if (design.backMode === "none" && design.fields.back.length > 0) {
     fail(`${design.id}: у одностороннего дизайна заданы поля рубашки`);
   }
+  if (design.types.length === 0) fail(`${design.id}: не задан ни один тип карты`);
+  const typeIds = new Set<string>();
+  for (const type of design.types) {
+    if (typeIds.has(type.id)) fail(`${design.id}: тип ${type.id} повторяется`);
+    typeIds.add(type.id);
+    if (!type.title.trim()) fail(`${design.id}: у типа ${type.id} пустое название`);
+  }
+  const imageIds = new Set<string>();
+  for (const image of design.images) {
+    if (imageIds.has(image.id)) fail(`${design.id}: картинка ${image.id} повторяется`);
+    imageIds.add(image.id);
+    const file = path.join(root, "public", ...image.path.split("/"));
+    if (!fs.existsSync(file)) fail(`${design.id}: нет картинки ${image.path}`);
+  }
 }
 
 const deckIds = new Set<string>();
@@ -53,13 +67,20 @@ for (const deck of decks) {
     fail(`${key}: неизвестный дизайн`);
     continue;
   }
-  if (design.backMode === "shared") checkFields(`${key} рубашка`, design.fields.back, deck.back);
-  if (design.backMode !== "shared" && deck.back) fail(`${key}: общая рубашка не предусмотрена дизайном`);
+  const typeIds = new Set(design.types.map((type) => type.id));
+  if (design.backMode === "shared") {
+    for (const [typeId, values] of Object.entries(deck.backs ?? {})) {
+      if (!typeIds.has(typeId)) fail(`${key}: рубашка неизвестного типа ${typeId}`);
+      checkFields(`${key} рубашка ${typeId}`, design.fields.back, values);
+    }
+  }
+  if (design.backMode !== "shared" && deck.backs) fail(`${key}: общие рубашки не предусмотрены дизайном`);
   const cardIds = new Set<string>();
   if (deck.cards.length === 0) fail(`${key}: в колоде нет карт`);
   for (const card of deck.cards) {
     if (cardIds.has(card.id)) fail(`${key}: карта ${card.id} повторяется`);
     cardIds.add(card.id);
+    if (!typeIds.has(card.typeId)) fail(`${key}/${card.id}: неизвестный тип ${card.typeId}`);
     if (!Number.isInteger(card.count) || card.count < 1) fail(`${key}/${card.id}: тираж должен быть целым числом от 1`);
     checkFields(`${key}/${card.id}`, design.fields.front, card.front);
     if (design.backMode === "per-card") checkFields(`${key}/${card.id} оборот`, design.fields.back, card.back);

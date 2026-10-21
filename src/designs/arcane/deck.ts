@@ -4,9 +4,10 @@ export const arcaneRelics: Deck = {
   id: "relics",
   designId: "arcane",
   title: "Основная",
-  back: { label: "РЕЛИКВИИ" },
+  backs: { main: { label: "РЕЛИКВИИ" } },
   cards: [
     {
+      typeId: "main",
       id: "vial",
       title: "Кровь луны",
       count: 3,
@@ -18,6 +19,7 @@ export const arcaneRelics: Deck = {
       },
     },
     {
+      typeId: "main",
       id: "book",
       title: "Некрономикон",
       count: 3,
@@ -29,6 +31,7 @@ export const arcaneRelics: Deck = {
       },
     },
     {
+      typeId: "main",
       id: "key",
       title: "Ключ бездны",
       count: 3,
@@ -40,6 +43,7 @@ export const arcaneRelics: Deck = {
       },
     },
     {
+      typeId: "main",
       id: "tower",
       title: "Башня луны",
       count: 3,
@@ -51,6 +55,7 @@ export const arcaneRelics: Deck = {
       },
     },
     {
+      typeId: "main",
       id: "knife",
       title: "Ритуальный нож",
       count: 3,
@@ -62,6 +67,7 @@ export const arcaneRelics: Deck = {
       },
     },
     {
+      typeId: "main",
       id: "eye",
       title: "Око стража",
       count: 3,

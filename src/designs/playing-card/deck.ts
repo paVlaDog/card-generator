@@ -4,7 +4,7 @@ export const playingSample: Deck = {
   id: "sample",
   designId: "playing-card",
   title: "Основная",
-  back: { label: "ПРОБА" },
+  backs: { main: { label: "ПРОБА" } },
   cards: ([
     ["as", "A♠", "A", "♠", 2],
     ["kh", "K♥", "K", "♥", 2],
@@ -18,6 +18,7 @@ export const playingSample: Deck = {
     ["2h", "2♥", "2", "♥", 1],
   ] as Array<[string, string, string, string, number]>).map(([id, title, rank, suit, count]) => ({
     id,
+    typeId: "main",
     title,
     count: Number(count),
     front: { rank, suit },

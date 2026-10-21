@@ -71,6 +71,20 @@ export type Recorder = {
   readonly ops: DrawOp[];
 };
 
+export type CardType = {
+  id: string;
+  title: string;
+};
+
+export type DesignImage = {
+  id: string;
+  name: string;
+  path: string;
+};
+
+/** The only card type of every design except Res Arcana. */
+export const MAIN_TYPE: CardType = { id: "main", title: "Основной" };
+
 export type Design = {
   id: string;
   title: string;
@@ -78,12 +92,17 @@ export type Design = {
   trim: { w: number; h: number };
   bleed: number;
   backMode: "none" | "shared" | "per-card";
+  /** Card kinds one deck of this design can hold. */
+  types: CardType[];
+  /** Pictures the design itself draws: background, icons, costs. Not card art. */
+  images: DesignImage[];
   fields: { front: FieldSpec[]; back: FieldSpec[] };
   render(face: FaceId, values: Record<string, string>, pen: Recorder): void;
 };
 
 export type CardDef = {
   id: string;
+  typeId: string;
   title: string;
   count: number;
   front: Record<string, string>;
@@ -95,7 +114,8 @@ export type Deck = {
   designId: string;
   title: string;
   cards: CardDef[];
-  back?: Record<string, string>;
+  /** Shared back of each card type. A type may have none until its back is ready. */
+  backs?: Record<string, Record<string, string>>;
 };
 
 export function bleedBox(design: Pick<Design, "trim" | "bleed">): { w: number; h: number } {
@@ -110,6 +130,10 @@ export function faceValues(
 ): Record<string, string> | null {
   if (face === "front") return card.front;
   if (design.backMode === "none") return null;
-  if (design.backMode === "shared") return deck.back ?? {};
+  if (design.backMode === "shared") return deck.backs?.[card.typeId] ?? null;
   return card.back ?? {};
+}
+
+export function cardsOfType(deck: Deck, typeId: string): CardDef[] {
+  return deck.cards.filter((card) => card.typeId === typeId);
 }

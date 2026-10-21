@@ -236,7 +236,15 @@ export async function pdfAllCards(measurer: Measurer, design: Design, deck: Deck
     await addCard(session, design, "front", card.front);
     if (design.backMode === "per-card" && card.back) await addCard(session, design, "back", card.back);
   }
-  if (design.backMode === "shared" && deck.back) await addCard(session, design, "back", deck.back);
+  if (design.backMode === "shared") {
+    const seen = new Set<string>();
+    for (const card of deck.cards) {
+      if (seen.has(card.typeId)) continue;
+      seen.add(card.typeId);
+      const back = deck.backs?.[card.typeId];
+      if (back) await addCard(session, design, "back", back);
+    }
+  }
   return finish(session);
 }
 
