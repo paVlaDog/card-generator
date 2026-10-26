@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { decks, designs } from "../src/designs/index.ts";
-import type { FieldSpec } from "../src/model/types.ts";
+import { isDoubleSided, type FieldSpec } from "../src/model/types.ts";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const errors: string[] = [];
@@ -68,9 +68,11 @@ for (const deck of decks) {
     continue;
   }
   const typeIds = new Set(design.types.map((type) => type.id));
+  const doubleSided = new Set(design.types.filter((type) => type.doubleSided).map((type) => type.id));
   if (design.backMode === "shared") {
     for (const [typeId, values] of Object.entries(deck.backs ?? {})) {
       if (!typeIds.has(typeId)) fail(`${key}: рубашка неизвестного типа ${typeId}`);
+      if (doubleSided.has(typeId)) fail(`${key}: у двустороннего типа ${typeId} нет общей рубашки`);
       checkFields(`${key} рубашка ${typeId}`, design.fields.back, values);
     }
   }
@@ -81,10 +83,11 @@ for (const deck of decks) {
     if (cardIds.has(card.id)) fail(`${key}: карта ${card.id} повторяется`);
     cardIds.add(card.id);
     if (!typeIds.has(card.typeId)) fail(`${key}/${card.id}: неизвестный тип ${card.typeId}`);
-    if (!Number.isInteger(card.count) || card.count < 1) fail(`${key}/${card.id}: тираж должен быть целым числом от 1`);
+    if (!Number.isInteger(card.count) || card.count < 0) fail(`${key}/${card.id}: тираж должен быть целым числом от 0`);
     checkFields(`${key}/${card.id}`, design.fields.front, card.front);
-    if (design.backMode === "per-card") checkFields(`${key}/${card.id} оборот`, design.fields.back, card.back);
-    if (design.backMode !== "per-card" && card.back) fail(`${key}/${card.id}: свой оборот не предусмотрен`);
+    const ownBack = design.backMode === "per-card" || isDoubleSided(design, card.typeId);
+    if (ownBack && card.back) checkFields(`${key}/${card.id} оборот`, design.fields.back, card.back);
+    if (!ownBack && card.back) fail(`${key}/${card.id}: свой оборот не предусмотрен`);
   }
 }
 

@@ -167,6 +167,15 @@ button.pressed, a.pressed {
 .pager { display: inline-flex; align-items: center; gap: 8px; }
 .pager span { min-width: 7.5rem; text-align: center; }
 
+.count { display: inline-flex; align-items: center; gap: 8px; }
+.count input {
+  width: 4.5rem;
+  background: var(--sheet);
+  border: 1px solid var(--ink);
+  padding: 7px 8px;
+  font: inherit;
+}
+
 .caption, .status { padding: 0 28px 28px; }
 
 .overlay {

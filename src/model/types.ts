@@ -74,6 +74,8 @@ export type Recorder = {
 export type CardType = {
   id: string;
   title: string;
+  /** Each card carries its own back instead of the type's shared shirt. */
+  doubleSided?: boolean;
 };
 
 export type DesignImage = {
@@ -122,6 +124,18 @@ export function bleedBox(design: Pick<Design, "trim" | "bleed">): { w: number; h
   return { w: design.trim.w + design.bleed * 2, h: design.trim.h + design.bleed * 2 };
 }
 
+export function isDoubleSided(design: Design, typeId: string): boolean {
+  return design.types.find((type) => type.id === typeId)?.doubleSided === true;
+}
+
+/** Whether the viewer should offer the back of this type. */
+export function showsBack(design: Design, deck: Deck, typeId: string): boolean {
+  if (isDoubleSided(design, typeId)) return true;
+  if (design.backMode === "per-card") return true;
+  if (design.backMode === "shared") return Boolean(deck.backs?.[typeId]);
+  return false;
+}
+
 export function faceValues(
   design: Design,
   deck: Deck,
@@ -129,6 +143,7 @@ export function faceValues(
   face: FaceId,
 ): Record<string, string> | null {
   if (face === "front") return card.front;
+  if (isDoubleSided(design, card.typeId)) return card.back ?? null;
   if (design.backMode === "none") return null;
   if (design.backMode === "shared") return deck.backs?.[card.typeId] ?? null;
   return card.back ?? {};

@@ -14,7 +14,7 @@ import {
   type PDFImage,
   type PDFPage,
 } from "pdf-lib";
-import { faceValues, type CardDef, type Design, type Deck, type DrawOp, type FaceId, type FontId, type Measurer } from "../model/types";
+import { faceValues, isDoubleSided, type CardDef, type Design, type Deck, type DrawOp, type FaceId, type FontId, type Measurer } from "../model/types";
 import { expandCounts, placements, sheetCount } from "../print/impose";
 import { cardPage, cellTrim, cropMarks, gridFor, sheetLabel, type Mark, type SheetFormat } from "../print/spec";
 import { sheetCaption } from "./draw";
@@ -233,13 +233,16 @@ export async function pdfSheet(
 export async function pdfAllCards(measurer: Measurer, design: Design, deck: Deck) {
   const session = await openSession(measurer);
   for (const card of deck.cards) {
+    if (card.count < 1) continue;
     await addCard(session, design, "front", card.front);
-    if (design.backMode === "per-card" && card.back) await addCard(session, design, "back", card.back);
+    if ((design.backMode === "per-card" || isDoubleSided(design, card.typeId)) && card.back) {
+      await addCard(session, design, "back", card.back);
+    }
   }
   if (design.backMode === "shared") {
     const seen = new Set<string>();
     for (const card of deck.cards) {
-      if (seen.has(card.typeId)) continue;
+      if (card.count < 1 || seen.has(card.typeId) || isDoubleSided(design, card.typeId)) continue;
       seen.add(card.typeId);
       const back = deck.backs?.[card.typeId];
       if (back) await addCard(session, design, "back", back);

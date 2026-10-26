@@ -1,5 +1,5 @@
 import { decksFor, designs, findDeck, findDesign } from "../designs";
-import { cardsOfType, faceValues, type Deck, type Design, type FaceId, type Measurer } from "../model/types";
+import { cardsOfType, faceValues, showsBack, type Deck, type Design, type FaceId, type Measurer } from "../model/types";
 import { expandCounts, placements, sheetCount } from "../print/impose";
 import { gridFor, SHEETS, sheetById, type SheetFormat } from "../print/spec";
 import { cardSvg, sheetSvg } from "../render/svg";
@@ -194,8 +194,7 @@ async function deckView(designId: string, deckId: string, mode: Mode): Promise<H
   const typeId = activeType(design);
   state.typeId = typeId;
   const scope = scopeDeck(deck, typeId);
-  const typeBack = design.backMode === "shared" && Boolean(deck.backs?.[typeId]);
-  const showBack = design.backMode === "per-card" || typeBack;
+  const showBack = showsBack(design, deck, typeId);
   if (!showBack) state.face = "front";
   const sheet = sheetOf();
   const grid = gridFor(design.trim, design.bleed, sheet);
@@ -267,6 +266,8 @@ async function deckView(designId: string, deckId: string, mode: Mode): Promise<H
     }, () => {
       state.cardIndex += 1;
     }));
+    const shown = scope.cards[state.cardIndex];
+    if (shown) tools.append(countField(shown));
   } else {
     tools.append(pager(state.sheetIndex, sheets, "Лист", () => {
       state.sheetIndex -= 1;
@@ -294,11 +295,19 @@ async function deckView(designId: string, deckId: string, mode: Mode): Promise<H
     page.append(stage);
   } else if (mode === "cards") {
     const card = scope.cards[state.cardIndex];
-    const values = faceValues(design, scope, card, state.face) ?? card.front;
-    stage.append(await cardSvg(design, state.face, values, measurer));
-    page.append(stage, h("p", "caption", `${card.title} · ×${card.count}. Красная линия — рез, поле вокруг неё — вылет ${design.bleed} мм. В PDF вместо линии стоят метки.`));
-  } else if (!sheets) {
+    const values = faceValues(design, scope, card, state.face);
+    if (!values) {
+      stage.append(h("p", "", "У этой карты ещё нет своего оборота."));
+    } else {
+      stage.append(await cardSvg(design, state.face, values, measurer));
+    }
+    const side = state.face === "back" ? "Оборот" : "Лицо";
+    page.append(stage, h("p", "caption", `${card.title} · ${side} · ×${card.count}. Красная линия — рез, поле вокруг неё — вылет ${design.bleed} мм. В PDF вместо линии стоят метки.`));
+  } else if (grid.cols === 0 || grid.rows === 0) {
     stage.append(h("p", "", "Карта не помещается на этот лист с полем 12 мм."));
+    page.append(stage);
+  } else if (!sheets) {
+    stage.append(h("p", "", "В колоде нет экземпляров для печати."));
     page.append(stage);
   } else {
     const placed = placements(expanded.length, grid.cols, grid.rows, state.sheetIndex, state.face).flatMap((item) => {
@@ -334,6 +343,25 @@ function buttonPair(items: Array<[string, string]>, current: string, choose: (va
     wrap.append(button);
   }
   return wrap;
+}
+
+function countField(card: { title: string; count: number }): HTMLElement {
+  const label = h("label", "count");
+  label.append(h("span", "", "В колоде"));
+  const input = h("input");
+  input.type = "number";
+  input.min = "0";
+  input.max = "99";
+  input.step = "1";
+  input.value = String(card.count);
+  input.setAttribute("aria-label", `Количество «${card.title}» в колоде`);
+  input.addEventListener("change", () => {
+    const next = Math.round(Number(input.value));
+    card.count = Number.isFinite(next) ? Math.min(99, Math.max(0, next)) : card.count;
+    void render();
+  });
+  label.append(input);
+  return label;
 }
 
 function pager(index: number, total: number, label: string, prev: () => void, next: () => void): HTMLElement {
@@ -417,7 +445,11 @@ function onKey(event: KeyboardEvent) {
     return;
   }
   if (route.name !== "deck") return;
-  if (event.target instanceof HTMLSelectElement) return;
+  if (
+    event.target instanceof HTMLInputElement
+    || event.target instanceof HTMLTextAreaElement
+    || event.target instanceof HTMLSelectElement
+  ) return;
   const design = findDesign(route.designId);
   const deck = findDeck(route.designId, route.deckId);
   if (!design || !deck) return;
