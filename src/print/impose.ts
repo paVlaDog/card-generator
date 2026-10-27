@@ -1,5 +1,12 @@
 export type Placed = { cardIndex: number; col: number; row: number };
 
+/** Types in design order, each continuing in the slots left by the previous type. */
+export function cardsForSheets<T extends { typeId: string }>(typeIds: readonly string[], cards: readonly T[]): T[] {
+  const known = new Set(typeIds);
+  const packed = typeIds.flatMap((typeId) => cards.filter((card) => card.typeId === typeId));
+  return [...packed, ...cards.filter((card) => !known.has(card.typeId))];
+}
+
 export function expandCounts<T extends { count: number }>(cards: T[]): T[] {
   const out: T[] = [];
   for (const card of cards) {

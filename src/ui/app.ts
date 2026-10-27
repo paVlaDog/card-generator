@@ -200,6 +200,10 @@ async function deckView(designId: string, deckId: string, mode: Mode): Promise<H
   const grid = gridFor(design.trim, design.bleed, sheet);
   const expanded = expandCounts(scope.cards);
   const sheets = sheetCount(expanded.length, grid.cols, grid.rows);
+  const deckSheets = design.types.reduce(
+    (sum, type) => sum + sheetCount(expandCounts(cardsOfType(deck, type.id)).length, grid.cols, grid.rows),
+    0,
+  );
   state.cardIndex = Math.min(state.cardIndex, Math.max(0, scope.cards.length - 1));
   state.sheetIndex = Math.min(state.sheetIndex, Math.max(0, sheets - 1));
 
@@ -283,7 +287,7 @@ async function deckView(designId: string, deckId: string, mode: Mode): Promise<H
     action("Скачать карту", () => downloadCard(design, scope), ready ?? "primary"),
     action("Скачать лист", () => downloadSheet(design, scope), sheets ? "primary" : "disabled"),
     action("Все карты", () => downloadAllCards(design, scope), ready),
-    action("Все листы", () => downloadAllSheets(design, scope), sheets ? undefined : "disabled"),
+    action("Все листы", () => downloadAllSheets(design, deck), deckSheets ? undefined : "disabled"),
   );
   if (state.busy) downloads.append(h("span", "status", state.busy));
   page.append(downloads);
@@ -414,7 +418,7 @@ async function downloadAllCards(design: Design, deck: Deck) {
 
 async function downloadAllSheets(design: Design, deck: Deck) {
   const sheet = sheetOf();
-  await run("Собираю PDF всех листов…", `${fileStem(design, deck)}-listy-${sheet.id}.pdf`, () => pdfAllSheets(measurer, design, deck, sheet));
+  await run("Собираю PDF всех листов…", `${deck.id}-listy-${sheet.id}.pdf`, () => pdfAllSheets(measurer, design, deck, sheet));
 }
 
 function fileStem(design: Design, deck: Deck): string {

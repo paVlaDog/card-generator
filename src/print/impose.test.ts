@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { expandCounts, placements, sheetCount } from "./impose";
+import { cardsForSheets, expandCounts, placements, sheetCount } from "./impose";
 import { cropMarks, gridFor, MARK_GAP, SHEETS, TRIM_MARGIN } from "./spec";
 
 const poker = { w: 63, h: 88 };
@@ -64,6 +64,22 @@ describe("imposition", () => {
       [0, 3, 0],
       [1, 2, 0],
     ]);
+  });
+
+  it("continues the next type in the slots left on the same sheet", () => {
+    const packed = cardsForSheets(["characters", "roles", "hints"], [
+      { id: "role-first", typeId: "roles" },
+      { id: "hint", typeId: "hints" },
+      { id: "character", typeId: "characters" },
+      { id: "stray", typeId: "other" },
+    ]);
+    expect(packed.map((card) => card.id)).toEqual(["character", "role-first", "hint", "stray"]);
+    const copies = expandCounts(packed.map((card) => ({ ...card, count: card.id === "character" ? 3 : 1 })));
+    expect(copies.map((card) => card.id)).toEqual(["character", "character", "character", "role-first", "hint", "stray"]);
+    const onSheet = (index: number) =>
+      placements(copies.length, 4, 1, index, "front").map((item) => copies[item.cardIndex].id);
+    expect(onSheet(0)).toEqual(["character", "character", "character", "role-first"]);
+    expect(onSheet(1)).toEqual(["hint", "stray"]);
   });
 
   it("expands copies and counts sheets, including a partial last sheet", () => {

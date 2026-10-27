@@ -15,7 +15,7 @@ import {
   type PDFPage,
 } from "pdf-lib";
 import { faceValues, isDoubleSided, type CardDef, type Design, type Deck, type DrawOp, type FaceId, type FontId, type Measurer } from "../model/types";
-import { expandCounts, placements, sheetCount } from "../print/impose";
+import { cardsForSheets, expandCounts, placements, sheetCount } from "../print/impose";
 import { cardPage, cellTrim, cropMarks, gridFor, sheetLabel, type Mark, type SheetFormat } from "../print/spec";
 import { sheetCaption } from "./draw";
 import { renderOps } from "./draw";
@@ -252,12 +252,16 @@ export async function pdfAllCards(measurer: Measurer, design: Design, deck: Deck
 }
 
 export async function pdfAllSheets(measurer: Measurer, design: Design, deck: Deck, sheet: SheetFormat) {
+  const packed: Deck = {
+    ...deck,
+    cards: cardsForSheets(design.types.map((type) => type.id), deck.cards),
+  };
   const grid = gridFor(design.trim, design.bleed, sheet);
-  const total = sheetCount(expandCounts(deck.cards).length, grid.cols, grid.rows);
+  const total = sheetCount(expandCounts(packed.cards).length, grid.cols, grid.rows);
   const session = await openSession(measurer);
   for (let index = 0; index < total; index += 1) {
-    await addSheet(session, design, deck, sheet, index, "front");
-    if (design.backMode !== "none") await addSheet(session, design, deck, sheet, index, "back");
+    await addSheet(session, design, packed, sheet, index, "front");
+    if (design.backMode !== "none") await addSheet(session, design, packed, sheet, index, "back");
   }
   return finish(session);
 }
