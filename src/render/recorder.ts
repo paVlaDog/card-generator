@@ -153,16 +153,46 @@ export function createRecorder(measurer: Measurer): Recorder {
     },
     text,
     textBox(value, box, opts) {
-      const sizeMm = (opts.size * 25.4) / 72;
-      const leading = sizeMm * (opts.lineHeight ?? 1.25);
-      const lines = wrap(value, box.w, (line) => measurer.width(line, opts.font, opts.size));
-      lines.forEach((line, index) => {
-        const baseline = box.y + sizeMm * 0.78 + index * leading;
-        if (baseline > box.y + box.h + sizeMm * 0.2) return;
+      const lineHeight = opts.lineHeight ?? 1.25;
+      const layout = (size: number) => {
+        const sizeMm = (size * 25.4) / 72;
+        const leading = sizeMm * lineHeight;
+        const lines = wrap(value, box.w, (line) => measurer.width(line, opts.font, size));
+        const fits = lines.every((_, index) => {
+          const baseline = sizeMm * 0.78 + index * leading;
+          return baseline <= box.h + sizeMm * 0.2;
+        });
+        return { size, sizeMm, leading, lines, fits };
+      };
+      let laid = layout(opts.size);
+      if (!laid.fits) {
+        let low = 5;
+        let high = opts.size;
+        let best = layout(low);
+        for (let step = 0; step < 12; step += 1) {
+          const mid = (low + high) / 2;
+          const trial = layout(mid);
+          if (trial.fits) {
+            best = trial;
+            low = mid;
+          } else high = mid;
+        }
+        laid = best;
+      }
+      laid.lines.forEach((line, index) => {
+        const baseline = box.y + laid.sizeMm * 0.78 + index * laid.leading;
+        if (baseline > box.y + box.h + laid.sizeMm * 0.2) return;
         let x = box.x;
         if (opts.align === "center") x = box.x + box.w / 2;
         if (opts.align === "right") x = box.x + box.w;
-        text(line, { x, y: baseline, font: opts.font, size: opts.size, color: opts.color, align: opts.align ?? "left" });
+        text(line, {
+          x,
+          y: baseline,
+          font: opts.font,
+          size: laid.size,
+          color: opts.color,
+          align: opts.align ?? "left",
+        });
       });
     },
     save() {
