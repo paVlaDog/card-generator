@@ -12,6 +12,7 @@ from _role_hint import (
     H,
     INK,
     RED,
+    W,
     apply_frame,
     draw_runs,
     font,
@@ -19,6 +20,7 @@ from _role_hint import (
     item,
     paragraph,
     parchment,
+    parchment_size,
 )
 
 OUT = Path(__file__).resolve().parent
@@ -88,7 +90,7 @@ CARDS = [
                 [
                     ("Йозеф Гейббельс и Сиро Исии активируют все свойства карты, включая «Подготовку», то есть карта будет выложена в повёрнутом набок состоянии.",),
                     ("При уничтожении карты эффекты защитных карт срабатывают в следующем порядке: Защитники Пёрл-Харбора, Хо Ши Мин, Шарль де Голль, Вьетминь. Если карта была спасена Защитниками Пёрл-Харбора или Хо Ши Мином, эффекты Шарля де Голля и Вьетминя не срабатывают.",),
-                    ("Антибатисты игнорируют свойства карт при уничтожении, но не при перемещении, что позволяет защититься от них Голубой Дивизией. Шарль де Голль и Вьетминь на Антибатистов не работают.",),
+                    ("Антибатисты игнорируют свойства карт при уничтожении, но не при перемещении, что позволяет защититься от них Голубой Дивизией. Шарль де Голль и Вьетминь на Антибатист не работают.",),
                     ("Вьетминь, Хуйвейбины и Рейнджеры позволяют брать карты в руку сверх максимума в 4.",),
                     ("Свойство карты выполняется полностью, даже если карта была сброшена в середине его выполнения. Например, если авиация уничтожает карты в области Шарля де Голля, она уничтожит обе карты, даже несмотря на то, что должна отправиться в сброс после уничтожения первой.",),
                 ],
@@ -99,6 +101,7 @@ CARDS = [
 
 
 def faction_line(draw, x, y, body, letters, width, leading):
+    hang = int(draw.textlength("— ", font=body))
     runs = [
         ("— ", INK, body),
         ("Ф", BRONZE, letters),
@@ -108,17 +111,26 @@ def faction_line(draw, x, y, body, letters, width, leading):
         ("К", RED, letters),
         (" в описаниях свойств карт — фракции Фашистов, Либералов и Коммунистов.", INK, body),
     ]
-    return draw_runs(draw, x, y, runs, width, leading)
+    return draw_runs(draw, x, y, runs, width, leading, hang)
 
 
-def paint(name: str, lead: int, sections: list) -> None:
-    im = parchment()
+PUBLISHED = {
+    "rules-1-play": "rules-play.png",
+    "rules-2-end": "rules-end.png",
+    "rules-3-mechanics": "rules-mechanics.png",
+}
+PUBLIC = Path(__file__).resolve().parents[1] / "public" / "assets" / "century"
+PAD = 43
+
+
+def paint(name: str, lead: int, sections: list, pad: int = 0):
+    im = parchment_size(W + pad * 2, H + pad * 2) if pad else parchment()
     draw = ImageDraw.Draw(im)
     title = font("calibrib.ttf", 28)
     body = font("calibriz.ttf", 25)
     letters = font("calibrib.ttf", 26)
-    x, width = 34, 607
-    y = 32
+    x, width = 34 + pad, 607
+    y = 32 + pad
     for index, (head, blocks) in enumerate(sections):
         if index:
             y += 14
@@ -131,13 +143,21 @@ def paint(name: str, lead: int, sections: list) -> None:
             else:
                 y = paragraph(draw, x, y, block, body, INK, width, lead)
             y += 8
-    print(name, "ends", y, "over" if y > 1000 else "ok")
-    apply_frame(im).save(OUT / f"{name}.png")
+    print(name, "pad", pad, "ends", y, "over" if y > H + pad - 40 else "ok")
+    if not pad:
+        im = apply_frame(im)
+    return im
 
 
 def main():
+    bleed_dir = PUBLIC / "hints-bleed"
+    bleed_dir.mkdir(parents=True, exist_ok=True)
     for name, lead, sections in CARDS:
-        paint(name, lead, sections)
+        plain = paint(name, lead, sections)
+        plain.save(OUT / f"{name}.png")
+        published = PUBLISHED[name]
+        plain.save(PUBLIC / "hints" / published)
+        paint(name, lead, sections, PAD).save(bleed_dir / published)
 
 
 if __name__ == "__main__":

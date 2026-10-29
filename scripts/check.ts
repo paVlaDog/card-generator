@@ -69,14 +69,23 @@ for (const deck of decks) {
   }
   const typeIds = new Set(design.types.map((type) => type.id));
   const doubleSided = new Set(design.types.filter((type) => type.doubleSided).map((type) => type.id));
+  const cutTypes = new Set(design.types.filter((type) => (type.cutBleed ?? 0) > 0).map((type) => type.id));
   if (design.backMode === "shared") {
     for (const [typeId, values] of Object.entries(deck.backs ?? {})) {
       if (!typeIds.has(typeId)) fail(`${key}: рубашка неизвестного типа ${typeId}`);
       if (doubleSided.has(typeId)) fail(`${key}: у двустороннего типа ${typeId} нет общей рубашки`);
       checkFields(`${key} рубашка ${typeId}`, design.fields.back, values);
     }
+    for (const [typeId, values] of Object.entries(deck.cutBacks ?? {})) {
+      if (!cutTypes.has(typeId)) fail(`${key}: рубашка под резку у типа без вылета ${typeId}`);
+      checkFields(`${key} рубашка под резку ${typeId}`, design.fields.back, values);
+    }
+    for (const typeId of cutTypes) {
+      if (doubleSided.has(typeId) || !deck.backs?.[typeId]) continue;
+      if (!deck.cutBacks?.[typeId]) fail(`${key}: у типа ${typeId} нет рубашки под резку`);
+    }
   }
-  if (design.backMode !== "shared" && deck.backs) fail(`${key}: общие рубашки не предусмотрены дизайном`);
+  if (design.backMode !== "shared" && (deck.backs || deck.cutBacks)) fail(`${key}: общие рубашки не предусмотрены дизайном`);
   const cardIds = new Set<string>();
   if (deck.cards.length === 0) fail(`${key}: в колоде нет карт`);
   for (const card of deck.cards) {
@@ -85,6 +94,14 @@ for (const deck of decks) {
     if (!typeIds.has(card.typeId)) fail(`${key}/${card.id}: неизвестный тип ${card.typeId}`);
     if (!Number.isInteger(card.count) || card.count < 0) fail(`${key}/${card.id}: тираж должен быть целым числом от 0`);
     checkFields(`${key}/${card.id}`, design.fields.front, card.front);
+    if (card.cut && !cutTypes.has(card.typeId)) fail(`${key}/${card.id}: копия под резку не предусмотрена`);
+    if (!card.cut && cutTypes.has(card.typeId)) fail(`${key}/${card.id}: нет копии под резку`);
+    if (card.cut) checkFields(`${key}/${card.id} резка`, design.fields.front, card.cut);
+    if (card.cutBack && !cutTypes.has(card.typeId)) fail(`${key}/${card.id}: оборот под резку не предусмотрен`);
+    if (doubleSided.has(card.typeId) && cutTypes.has(card.typeId) && !card.cutBack) {
+      fail(`${key}/${card.id}: нет оборота под резку`);
+    }
+    if (card.cutBack) checkFields(`${key}/${card.id} оборот под резку`, design.fields.back, card.cutBack);
     const ownBack = design.backMode === "per-card" || isDoubleSided(design, card.typeId);
     if (ownBack && card.back) checkFields(`${key}/${card.id} оборот`, design.fields.back, card.back);
     if (!ownBack && card.back) fail(`${key}/${card.id}: свой оборот не предусмотрен`);

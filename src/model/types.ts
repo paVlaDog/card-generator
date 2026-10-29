@@ -19,7 +19,7 @@ export type DrawOp =
   | ({ t: "polygon"; points: Array<[number, number]> } & Paint)
   | ({ t: "polyline"; points: Array<[number, number]> } & Paint)
   | ({ t: "circle"; cx: number; cy: number; r: number } & Paint)
-  | { t: "image"; path: string; box: Box; fit: "cover" | "contain" }
+  | { t: "image"; path: string; box: Box; fit: "cover" | "contain" | "fill" }
   | {
       t: "text";
       text: string;
@@ -41,7 +41,7 @@ export type Recorder = {
   circle(cx: number, cy: number, r: number, style?: Paint): void;
   polygon(points: Array<[number, number]>, style?: Paint): void;
   polyline(points: Array<[number, number]>, style?: Paint): void;
-  image(path: string, box: Box, fit?: "cover" | "contain"): void;
+  image(path: string, box: Box, fit?: "cover" | "contain" | "fill"): void;
   text(
     value: string,
     opts: {
@@ -76,6 +76,11 @@ export type CardType = {
   title: string;
   /** Each card carries its own back instead of the type's shared shirt. */
   doubleSided?: boolean;
+  /**
+   * Cut-ready copy. This many millimetres of black sit between the picture and the
+   * cut line, and the same amount continues outside the cut line.
+   */
+  cutBleed?: number;
 };
 
 export type DesignImage = {
@@ -109,6 +114,10 @@ export type CardDef = {
   count: number;
   front: Record<string, string>;
   back?: Record<string, string>;
+  /** Same card with bleed built around the picture, for the cutter. */
+  cut?: Record<string, string>;
+  /** Bleed copy of a double-sided card's own back. */
+  cutBack?: Record<string, string>;
 };
 
 export type Deck = {
@@ -118,7 +127,31 @@ export type Deck = {
   cards: CardDef[];
   /** Shared back of each card type. A type may have none until its back is ready. */
   backs?: Record<string, Record<string, string>>;
+  /** Shared back with bleed, for types that store a cut-ready copy. */
+  cutBacks?: Record<string, Record<string, string>>;
 };
+
+/**
+ * Picture, then `amount` mm, then the cut line, then another `amount` mm.
+ * `values.art` is the stored cut picture, which already fills that whole outer box.
+ */
+export function withCutCopy(design: Design, amount: number): Design {
+  const trim = { w: design.trim.w + amount * 2, h: design.trim.h + amount * 2 };
+  const outer = { x: 0, y: 0, w: trim.w + amount * 2, h: trim.h + amount * 2 };
+  return {
+    ...design,
+    trim,
+    bleed: amount,
+    render(_face, values, pen) {
+      pen.rect(outer, { fill: "#000000" });
+      if (values.art) pen.image(values.art, outer, "fill");
+    },
+  };
+}
+
+export function typeCutBleed(design: Design, typeId: string): number {
+  return design.types.find((type) => type.id === typeId)?.cutBleed ?? 0;
+}
 
 export function bleedBox(design: Pick<Design, "trim" | "bleed">): { w: number; h: number } {
   return { w: design.trim.w + design.bleed * 2, h: design.trim.h + design.bleed * 2 };
@@ -141,7 +174,15 @@ export function faceValues(
   deck: Deck,
   card: CardDef,
   face: FaceId,
+  cut = false,
 ): Record<string, string> | null {
+    if (cut) {
+    if (face === "front") return card.cut ?? null;
+    if (isDoubleSided(design, card.typeId)) return card.cutBack ?? null;
+    if (design.backMode === "none") return null;
+    if (design.backMode === "shared") return deck.cutBacks?.[card.typeId] ?? null;
+    return null;
+  }
   if (face === "front") return card.front;
   if (isDoubleSided(design, card.typeId)) return card.back ?? null;
   if (design.backMode === "none") return null;

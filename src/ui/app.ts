@@ -1,5 +1,5 @@
 import { decksFor, designs, findDeck, findDesign } from "../designs";
-import { cardsOfType, faceValues, showsBack, type Deck, type Design, type FaceId, type Measurer } from "../model/types";
+import { cardsOfType, faceValues, showsBack, typeCutBleed, withCutCopy, type Deck, type Design, type FaceId, type Measurer } from "../model/types";
 import { expandCounts, placements, sheetCount } from "../print/impose";
 import { gridFor, SHEETS, sheetById, type SheetFormat } from "../print/spec";
 import { cardSvg, sheetSvg } from "../render/svg";
@@ -18,6 +18,7 @@ type State = {
   error: string | null;
   deckKey: string | null;
   typeId: string | null;
+  cut: boolean;
 };
 
 const state: State = {
@@ -29,6 +30,7 @@ const state: State = {
   error: null,
   deckKey: null,
   typeId: null,
+  cut: false,
 };
 
 let app: HTMLElement;
@@ -89,6 +91,7 @@ function syncDeck(route: Route) {
   state.sheetIndex = 0;
   state.face = "front";
   state.typeId = null;
+  state.cut = false;
   state.error = null;
 }
 
@@ -193,11 +196,15 @@ async function deckView(designId: string, deckId: string, mode: Mode): Promise<H
   if (!design || !deck) return missing("Такой колоды нет.");
   const typeId = activeType(design);
   state.typeId = typeId;
+  if (typeCutBleed(design, typeId) <= 0) state.cut = false;
   const scope = scopeDeck(deck, typeId);
   const showBack = showsBack(design, deck, typeId);
   if (!showBack) state.face = "front";
   const sheet = sheetOf();
-  const grid = gridFor(design.trim, design.bleed, sheet);
+  const cutAmount = typeCutBleed(design, typeId);
+  const useCut = mode === "sheets" ? cutAmount > 0 : state.cut && cutAmount > 0;
+  const shown = useCut ? withCutCopy(design, cutAmount) : design;
+  const grid = gridFor(shown.trim, shown.bleed, sheet);
   const expanded = expandCounts(scope.cards);
   const sheets = sheetCount(expanded.length, grid.cols, grid.rows);
   const deckSheets = design.types.reduce(
@@ -226,6 +233,20 @@ async function deckView(designId: string, deckId: string, mode: Mode): Promise<H
         state.cardIndex = 0;
         state.sheetIndex = 0;
         state.face = "front";
+        state.cut = false;
+      },
+    ));
+  }
+  if (mode === "cards" && typeCutBleed(design, typeId) > 0) {
+    tools.append(buttonPair(
+      [
+        ["plain", "Обычная"],
+        ["cut", "Под резку"],
+      ],
+      state.cut ? "cut" : "plain",
+      (value) => {
+        state.cut = value === "cut";
+        state.sheetIndex = 0;
       },
     ));
   }
@@ -299,14 +320,16 @@ async function deckView(designId: string, deckId: string, mode: Mode): Promise<H
     page.append(stage);
   } else if (mode === "cards") {
     const card = scope.cards[state.cardIndex];
-    const values = faceValues(design, scope, card, state.face);
+    const values = faceValues(design, scope, card, state.face, useCut);
     if (!values) {
-      stage.append(h("p", "", "У этой карты ещё нет своего оборота."));
+      stage.append(h("p", "", state.cut ? "У этой карты ещё нет копии под резку." : "У этой карты ещё нет своего оборота."));
     } else {
-      stage.append(await cardSvg(design, state.face, values, measurer));
+      stage.append(await cardSvg(shown, state.face, values, measurer));
     }
     const side = state.face === "back" ? "Оборот" : "Лицо";
-    page.append(stage, h("p", "caption", `${card.title} · ${side} · ×${card.count}. Красная линия — рез, поле вокруг неё — вылет ${design.bleed} мм. В PDF вместо линии стоят метки.`));
+    const kind = useCut ? `под резку · до реза ${cutAmount} мм и ещё ${cutAmount} мм снаружи · ` : "";
+    const bleedNote = useCut ? "" : ` Красная линия — рез, поле вокруг неё — вылет ${shown.bleed} мм.`;
+    page.append(stage, h("p", "caption", `${card.title} · ${side} · ${kind}×${card.count}.${bleedNote} В PDF вместо линии стоят метки.`));
   } else if (grid.cols === 0 || grid.rows === 0) {
     stage.append(h("p", "", "Карта не помещается на этот лист с полем 12 мм."));
     page.append(stage);
@@ -315,11 +338,17 @@ async function deckView(designId: string, deckId: string, mode: Mode): Promise<H
     page.append(stage);
   } else {
     const placed = placements(expanded.length, grid.cols, grid.rows, state.sheetIndex, state.face).flatMap((item) => {
-      const values = faceValues(design, scope, expanded[item.cardIndex], state.face);
+      const values = faceValues(design, scope, expanded[item.cardIndex], state.face, useCut);
       return values ? [{ col: item.col, row: item.row, values }] : [];
     });
-    stage.append(await sheetSvg(design, measurer, grid, sheet, placed, state.face, state.sheetIndex, sheets));
-    page.append(stage, h("p", "caption", "Красная рамка только на экране и показывает рез. В PDF остаются чёрные метки в поле листа. Пустые ячейки держат ту же сетку."));
+    stage.append(await sheetSvg(shown, measurer, grid, sheet, placed, state.face, state.sheetIndex, sheets));
+    const cutDetail = typeId === "hints"
+      ? "У правил пергамент продолжается за край, у ликбеза вылет чёрный."
+      : typeId === "roles" && state.face === "back"
+        ? "Оборот продолжается пергаментом."
+        : "Фото продолжается чёрным, пергамент — своей текстурой.";
+    const cutNote = useCut ? ` Карты под резку: ${cutAmount} мм до красной рамки и ещё ${cutAmount} мм снаружи. ${cutDetail}` : "";
+    page.append(stage, h("p", "caption", `Красная рамка только на экране и показывает рез.${cutNote} В PDF остаются чёрные метки в поле листа. Пустые ячейки держат ту же сетку.`));
   }
   if (state.error) page.append(h("p", "status", state.error));
   return page;
@@ -401,19 +430,23 @@ function action(label: string, run: () => void, kind?: string): HTMLButtonElemen
 async function downloadCard(design: Design, deck: Deck) {
   const card = deck.cards[state.cardIndex];
   if (!card) return;
-  await run("Собираю PDF карты…", cardFileName(deck.id, card), () => pdfCard(measurer, design, card, deck, state.face));
+  const cut = state.cut;
+  const name = cardFileName(deck.id, card).replace(/\.pdf$/, cut ? "-rezka.pdf" : ".pdf");
+  await run("Собираю PDF карты…", name, () => pdfCard(measurer, design, card, deck, state.face, cut));
 }
 
 async function downloadSheet(design: Design, deck: Deck) {
   const sheet = sheetOf();
   const side = state.face === "front" ? "lico" : "oborot";
+  const cut = typeCutBleed(design, deck.cards[0]?.typeId ?? "") > 0;
   await run("Собираю PDF листа…", `${fileStem(design, deck)}-${sheet.id}-${state.sheetIndex + 1}-${side}.pdf`, () =>
-    pdfSheet(measurer, design, deck, sheet, state.sheetIndex, state.face),
+    pdfSheet(measurer, design, deck, sheet, state.sheetIndex, state.face, cut),
   );
 }
 
 async function downloadAllCards(design: Design, deck: Deck) {
-  await run("Собираю PDF всех карт…", `${fileStem(design, deck)}-karty.pdf`, () => pdfAllCards(measurer, design, deck));
+  const cut = state.cut ? "-rezka" : "";
+  await run("Собираю PDF всех карт…", `${fileStem(design, deck)}${cut}-karty.pdf`, () => pdfAllCards(measurer, design, deck, state.cut));
 }
 
 async function downloadAllSheets(design: Design, deck: Deck) {

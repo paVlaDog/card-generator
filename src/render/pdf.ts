@@ -14,7 +14,7 @@ import {
   type PDFImage,
   type PDFPage,
 } from "pdf-lib";
-import { faceValues, isDoubleSided, type CardDef, type Design, type Deck, type DrawOp, type FaceId, type FontId, type Measurer } from "../model/types";
+import { faceValues, isDoubleSided, withCutCopy, type CardDef, type Design, type Deck, type DrawOp, type FaceId, type FontId, type Measurer } from "../model/types";
 import { cardsForSheets, expandCounts, placements, sheetCount } from "../print/impose";
 import { cardPage, cellTrim, cropMarks, gridFor, sheetLabel, type Mark, type SheetFormat } from "../print/spec";
 import { sheetCaption } from "./draw";
@@ -140,6 +140,12 @@ function paintMarks(page: PDFPage, marks: Mark[]) {
   }
 }
 
+function forPrint(design: Design, cut: boolean): Design {
+  if (!cut) return design;
+  const amount = design.types.reduce((max, type) => Math.max(max, type.cutBleed ?? 0), 0);
+  return amount > 0 ? withCutCopy(design, amount) : design;
+}
+
 async function addCard(session: Session, design: Design, face: FaceId, values: Record<string, string>) {
   const pageBox = cardPage(design.trim, design.bleed);
   const page = session.pdf.addPage([pageBox.w * MM_TO_PT, pageBox.h * MM_TO_PT]);
@@ -167,9 +173,12 @@ async function addSheet(
   sheet: SheetFormat,
   sheetIndex: number,
   face: FaceId,
+  cut = false,
 ) {
-  const grid = gridFor(design.trim, design.bleed, sheet);
-  const expanded = expandCounts(deck.cards);
+  const shown = forPrint(design, cut);
+  const printing: Deck = cut ? { ...deck, cards: deck.cards.filter((card) => card.cut) } : deck;
+  const grid = gridFor(shown.trim, shown.bleed, sheet);
+  const expanded = expandCounts(printing.cards);
   const total = sheetCount(expanded.length, grid.cols, grid.rows);
   const page = session.pdf.addPage([sheet.w * MM_TO_PT, sheet.h * MM_TO_PT]);
   page.drawRectangle({
@@ -181,15 +190,15 @@ async function addSheet(
   });
   for (const item of placements(expanded.length, grid.cols, grid.rows, sheetIndex, face)) {
     const card = expanded[item.cardIndex];
-    const values = faceValues(design, deck, card, face);
+    const values = faceValues(design, printing, card, face, cut);
     if (!values) continue;
     const trim = cellTrim(grid, item.col, item.row);
     await paintOps(
       session,
       page,
-      renderOps(design, face, values, session.measurer),
-      trim.x - design.bleed,
-      trim.y - design.bleed,
+      renderOps(shown, face, values, session.measurer),
+      trim.x - shown.bleed,
+      trim.y - shown.bleed,
     );
   }
   paintMarks(page, cropMarks(grid));
@@ -209,11 +218,11 @@ async function finish(session: Session): Promise<Uint8Array> {
   return session.pdf.save();
 }
 
-export async function pdfCard(measurer: Measurer, design: Design, card: CardDef, deck: Deck, face: FaceId) {
-  const values = faceValues(design, deck, card, face);
+export async function pdfCard(measurer: Measurer, design: Design, card: CardDef, deck: Deck, face: FaceId, cut = false) {
+  const values = faceValues(design, deck, card, face, cut);
   if (!values) throw new Error("У этой стороны нет макета");
   const session = await openSession(measurer);
-  await addCard(session, design, face, values);
+  await addCard(session, forPrint(design, cut), face, values);
   return finish(session);
 }
 
@@ -224,44 +233,58 @@ export async function pdfSheet(
   sheet: SheetFormat,
   sheetIndex: number,
   face: FaceId,
+  cut = false,
 ) {
   const session = await openSession(measurer);
-  await addSheet(session, design, deck, sheet, sheetIndex, face);
+  await addSheet(session, design, deck, sheet, sheetIndex, face, cut);
   return finish(session);
 }
 
-export async function pdfAllCards(measurer: Measurer, design: Design, deck: Deck) {
+export async function pdfAllCards(measurer: Measurer, design: Design, deck: Deck, cut = false) {
+  const shown = forPrint(design, cut);
   const session = await openSession(measurer);
   for (const card of deck.cards) {
-    if (card.count < 1) continue;
-    await addCard(session, design, "front", card.front);
-    if ((design.backMode === "per-card" || isDoubleSided(design, card.typeId)) && card.back) {
-      await addCard(session, design, "back", card.back);
+    if (card.count < 1 || (cut && !card.cut)) continue;
+    const front = faceValues(design, deck, card, "front", cut);
+    if (front) await addCard(session, shown, "front", front);
+    const ownBack = design.backMode === "per-card" || isDoubleSided(design, card.typeId);
+    if (ownBack) {
+      const back = faceValues(design, deck, card, "back", cut);
+      if (back) await addCard(session, shown, "back", back);
     }
   }
   if (design.backMode === "shared") {
     const seen = new Set<string>();
     for (const card of deck.cards) {
       if (card.count < 1 || seen.has(card.typeId) || isDoubleSided(design, card.typeId)) continue;
+      if (cut && !card.cut) continue;
       seen.add(card.typeId);
-      const back = deck.backs?.[card.typeId];
-      if (back) await addCard(session, design, "back", back);
+      const back = faceValues(design, deck, card, "back", cut);
+      if (back) await addCard(session, shown, "back", back);
     }
   }
   return finish(session);
 }
 
 export async function pdfAllSheets(measurer: Measurer, design: Design, deck: Deck, sheet: SheetFormat) {
-  const packed: Deck = {
-    ...deck,
-    cards: cardsForSheets(design.types.map((type) => type.id), deck.cards),
-  };
-  const grid = gridFor(design.trim, design.bleed, sheet);
-  const total = sheetCount(expandCounts(packed.cards).length, grid.cols, grid.rows);
   const session = await openSession(measurer);
-  for (let index = 0; index < total; index += 1) {
-    await addSheet(session, design, packed, sheet, index, "front");
-    if (design.backMode !== "none") await addSheet(session, design, packed, sheet, index, "back");
+  const cutIds = design.types.filter((type) => (type.cutBleed ?? 0) > 0).map((type) => type.id);
+  const cutSet = new Set(cutIds);
+  const plainIds = design.types.map((type) => type.id).filter((id) => !cutSet.has(id));
+  const groups = [
+    { cards: cardsForSheets(cutIds, deck.cards.filter((card) => cutSet.has(card.typeId))), cut: true },
+    { cards: cardsForSheets(plainIds, deck.cards.filter((card) => !cutSet.has(card.typeId))), cut: false },
+  ];
+  for (const group of groups) {
+    if (group.cards.length === 0) continue;
+    const packed: Deck = { ...deck, cards: group.cards };
+    const shown = forPrint(design, group.cut);
+    const grid = gridFor(shown.trim, shown.bleed, sheet);
+    const total = sheetCount(expandCounts(packed.cards).length, grid.cols, grid.rows);
+    for (let index = 0; index < total; index += 1) {
+      await addSheet(session, design, packed, sheet, index, "front", group.cut);
+      if (design.backMode !== "none") await addSheet(session, design, packed, sheet, index, "back", group.cut);
+    }
   }
   return finish(session);
 }

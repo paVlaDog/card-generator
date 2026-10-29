@@ -13,14 +13,14 @@ function draw(values: Record<string, string>, pen: Recorder): void {
 export const century: Design = {
   id: "century",
   title: "20 век",
-  description: "Готовые карты: персонажи, роли и подсказки. Рисунок уже содержит всю карту, отдельного вылета нет. У персонажей общая рубашка, у ролей на обороте подсказка. Подсказки двусторонние: у каждой свой оборот.",
+  description: "Готовые карты: персонажи, роли и подсказки. У всех есть копия под резку: 2 мм от рисунка до реза и ещё 2 мм снаружи. Фото и ликбез продолжаются чёрным, пергамент правил и оборота ролей — своей текстурой. У персонажей общая рубашка, у ролей на обороте подсказка. Подсказки двусторонние: у каждой свой оборот.",
   trim: { w: TRIM_W, h: TRIM_H },
   bleed: 0,
   backMode: "shared",
   types: [
-    { id: "characters", title: "Карты персонажей" },
-    { id: "roles", title: "Карты ролей" },
-    { id: "hints", title: "Подсказки", doubleSided: true },
+    { id: "characters", title: "Карты персонажей", cutBleed: 2 },
+    { id: "roles", title: "Карты ролей", cutBleed: 2 },
+    { id: "hints", title: "Подсказки", doubleSided: true, cutBleed: 2 },
   ],
   images: [],
   fields: {

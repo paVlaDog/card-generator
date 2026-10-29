@@ -46,4 +46,41 @@ describe("card types", () => {
     expect(faceValues(design, withShirt, bare, "back")).toBeNull();
     expect(faceValues(design, withShirt, hint, "front")).toEqual({ art: "front.png" });
   });
+
+  it("reads the stored cut copy and its shared back", () => {
+    const person: CardDef = {
+      id: "hero",
+      typeId: "artifacts",
+      title: "Герой",
+      count: 1,
+      front: { art: "plain.png" },
+      cut: { art: "bleed.png" },
+    };
+    const cutting: Deck = {
+      ...deck,
+      cutBacks: { artifacts: { art: "shirt-bleed.png" } },
+      cards: [person],
+    };
+    expect(faceValues(design, cutting, person, "front", true)).toEqual({ art: "bleed.png" });
+    expect(faceValues(design, cutting, person, "back", true)).toEqual({ art: "shirt-bleed.png" });
+    expect(faceValues(design, cutting, { ...person, cut: undefined }, "front", true)).toBeNull();
+    expect(faceValues(design, cutting, person, "front")).toEqual({ art: "plain.png" });
+  });
+
+  it("reads both faces of a double-sided cut copy", () => {
+    const hint: CardDef = {
+      id: "rules",
+      typeId: "hints",
+      title: "Правила",
+      count: 1,
+      front: { art: "front.png" },
+      back: { art: "back.png" },
+      cut: { art: "front-bleed.png" },
+      cutBack: { art: "back-bleed.png" },
+    };
+    expect(faceValues(design, deck, hint, "front", true)).toEqual({ art: "front-bleed.png" });
+    expect(faceValues(design, deck, hint, "back", true)).toEqual({ art: "back-bleed.png" });
+    expect(faceValues(design, deck, hint, "back")).toEqual({ art: "back.png" });
+    expect(faceValues(design, deck, { ...hint, cutBack: undefined }, "back", true)).toBeNull();
+  });
 });

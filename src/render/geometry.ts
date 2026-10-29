@@ -1,7 +1,7 @@
 import type { Box } from "../model/types";
 
-export function imagePlacement(box: Box, imgW: number, imgH: number, fit: "cover" | "contain"): Box {
-  if (imgW <= 0 || imgH <= 0) return box;
+export function imagePlacement(box: Box, imgW: number, imgH: number, fit: "cover" | "contain" | "fill"): Box {
+  if (fit === "fill" || imgW <= 0 || imgH <= 0) return box;
   const scale =
     fit === "cover" ? Math.max(box.w / imgW, box.h / imgH) : Math.min(box.w / imgW, box.h / imgH);
   const w = imgW * scale;

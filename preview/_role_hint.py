@@ -49,12 +49,31 @@ def parchment() -> Image.Image:
     left, top = 280, 20
     crop = src.crop((left, top, left + crop_w, top + 960))
     card = crop.resize((W, H), Image.Resampling.LANCZOS)
-    r, g, b = card.split()
-    r = r.point(lambda v: min(255, int(v * 0.74 + 8)))
-    g = g.point(lambda v: min(255, int(v * 0.68 + 6)))
-    b = b.point(lambda v: min(255, int(v * 0.55)))
-    card = Image.merge("RGB", (r, g, b))
+    red, green, blue = card.split()
+    red = red.point(lambda v: min(255, int(v * 0.74 + 8)))
+    green = green.point(lambda v: min(255, int(v * 0.68 + 6)))
+    blue = blue.point(lambda v: min(255, int(v * 0.55)))
+    card = Image.merge("RGB", (red, green, blue))
     return ImageEnhance.Contrast(card).enhance(1.08)
+
+
+def parchment_size(width: int, height: int) -> Image.Image:
+    """The same parchment sheet, covering a card of any size including bleed."""
+    if (width, height) == (W, H):
+        return parchment()
+    src = Image.open(SRC).convert("RGB")
+    crop_h = src.height
+    crop_w = crop_h * width / height
+    center_x = 280 + int(960 * W / H) / 2
+    x0 = center_x - crop_w / 2
+    sheet = src.crop((int(round(x0)), 0, int(round(x0 + crop_w)), crop_h))
+    sheet = sheet.resize((width, height), Image.Resampling.LANCZOS)
+    red, green, blue = sheet.split()
+    red = red.point(lambda v: min(255, int(v * 0.74 + 8)))
+    green = green.point(lambda v: min(255, int(v * 0.68 + 6)))
+    blue = blue.point(lambda v: min(255, int(v * 0.55)))
+    sheet = Image.merge("RGB", (red, green, blue))
+    return ImageEnhance.Contrast(sheet).enhance(1.08)
 
 
 def apply_frame(card: Image.Image) -> Image.Image:
@@ -104,7 +123,7 @@ def stroked(draw, xy, value, face, fill, stroke=INK, sw=2):
     draw.text((x, y), value, font=face, fill=fill)
 
 
-def draw_runs(draw, x, y, runs, width, leading):
+def draw_runs(draw, x, y, runs, width, leading, hang=0):
     cursor = x
     line_y = y
     for value, fill, run_face in runs:
@@ -114,9 +133,9 @@ def draw_runs(draw, x, y, runs, width, leading):
             if not token:
                 continue
             length = draw.textlength(token, font=run_face)
-            if cursor + length > x + width and cursor > x:
+            if cursor + length > x + width and cursor > x + hang:
                 line_y += leading
-                cursor = x
+                cursor = x + hang
             draw.text((cursor, line_y), token, font=run_face, fill=fill)
             cursor += length
     return line_y + leading
