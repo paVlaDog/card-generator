@@ -220,6 +220,7 @@ export const portal: Design = {
   description: "Карта действия на хэллоуин: тип, название и правило. Тёмное поле и серебряные завитки.",
   trim: { w: TRIM_W, h: TRIM_H },
   bleed: BLEED,
+  optionalBleed: true,
   backMode: "shared",
   types: [MAIN_TYPE],
   images: [],

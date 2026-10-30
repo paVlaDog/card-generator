@@ -98,6 +98,8 @@ export type Design = {
   description: string;
   trim: { w: number; h: number };
   bleed: number;
+  /** Ordinary view is the trim. `bleed` is only the margin for the cutter. */
+  optionalBleed?: boolean;
   backMode: "none" | "shared" | "per-card";
   /** Card kinds one deck of this design can hold. */
   types: CardType[];
@@ -151,6 +153,44 @@ export function withCutCopy(design: Design, amount: number): Design {
 
 export function typeCutBleed(design: Design, typeId: string): number {
   return design.types.find((type) => type.id === typeId)?.cutBleed ?? 0;
+}
+
+export function designCutAmount(design: Design): number {
+  return design.types.reduce((max, type) => Math.max(max, type.cutBleed ?? 0), 0);
+}
+
+/** The viewer can switch this design between the trim and a cutter margin. */
+export function offersPrintChoice(design: Design, typeId: string): boolean {
+  return typeCutBleed(design, typeId) > 0 || Boolean(design.optionalBleed);
+}
+
+/** `cut` asks for stored cutter pictures, which only exist on types with `cutBleed`. */
+export function usesCutArt(design: Design, cut: boolean): boolean {
+  return cut && designCutAmount(design) > 0;
+}
+
+function trimOnly(design: Design): Design {
+  const bleed = design.bleed;
+  if (bleed <= 0) return design;
+  const render = design.render;
+  return {
+    ...design,
+    bleed: 0,
+    render(face, values, pen) {
+      pen.save();
+      pen.translate(-bleed, -bleed);
+      render(face, values, pen);
+      pen.restore();
+    },
+  };
+}
+
+/** Ordinary view drops an optional print bleed. Cutter view keeps it, or the stored cut copy. */
+export function shownDesign(design: Design, cut: boolean): Design {
+  const amount = designCutAmount(design);
+  if (cut && amount > 0) return withCutCopy(design, amount);
+  if (!cut && design.optionalBleed) return trimOnly(design);
+  return design;
 }
 
 export function bleedBox(design: Pick<Design, "trim" | "bleed">): { w: number; h: number } {

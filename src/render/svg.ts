@@ -1,4 +1,4 @@
-import { bleedBox, type Design, type DrawOp, type FaceId, type Measurer } from "../model/types";
+import { bleedBox, type Box, type Design, type DrawOp, type FaceId, type Measurer } from "../model/types";
 import { cellTrim, cropMarks, type Grid, sheetLabel } from "../print/spec";
 import { assetUrl, imagePlacement } from "./geometry";
 import { renderOps, sheetCaption } from "./draw";
@@ -48,10 +48,32 @@ function blank(w: number, h: number): SVGSVGElement {
   return svg;
 }
 
-export async function appendOps(svg: SVGSVGElement, ops: DrawOp[], originX = 0, originY = 0): Promise<void> {
+export async function appendOps(
+  svg: SVGSVGElement,
+  ops: DrawOp[],
+  originX = 0,
+  originY = 0,
+  clipTo?: Pick<Box, "w" | "h">,
+): Promise<void> {
+  const holder = el("g");
+  const defs = svg.querySelector("defs");
+  if (clipTo && defs) {
+    const id = `slot-${clipSeq++}`;
+    const mask = el("clipPath");
+    mask.id = id;
+    mask.setAttribute("clipPathUnits", "userSpaceOnUse");
+    const frame = el("rect");
+    frame.setAttribute("x", String(originX));
+    frame.setAttribute("y", String(originY));
+    frame.setAttribute("width", String(clipTo.w));
+    frame.setAttribute("height", String(clipTo.h));
+    mask.append(frame);
+    defs.append(mask);
+    holder.setAttribute("clip-path", `url(#${id})`);
+  }
   const group = el("g");
   if (originX || originY) group.setAttribute("transform", `translate(${originX} ${originY})`);
-  const defs = svg.querySelector("defs");
+  holder.append(group);
   for (const op of ops) {
     if (op.t === "rect") {
       const node = el("rect");
@@ -113,7 +135,7 @@ export async function appendOps(svg: SVGSVGElement, ops: DrawOp[], originX = 0, 
       group.append(image);
     }
   }
-  svg.append(group);
+  svg.append(holder);
 }
 
 function guide(svg: SVGSVGElement, x: number, y: number, w: number, h: number) {
@@ -136,8 +158,9 @@ export async function cardSvg(
 ): Promise<SVGSVGElement> {
   const box = bleedBox(design);
   const svg = blank(box.w, box.h);
+  svg.setAttribute("overflow", "hidden");
   svg.setAttribute("aria-label", "Карта с вылетом");
-  await appendOps(svg, renderOps(design, face, values, measurer));
+  await appendOps(svg, renderOps(design, face, values, measurer), 0, 0, box);
   guide(svg, design.bleed, design.bleed, design.trim.w, design.trim.h);
   return svg;
 }
@@ -161,7 +184,13 @@ export async function sheetSvg(
   svg.append(paper);
   for (const item of placed) {
     const trim = cellTrim(grid, item.col, item.row);
-    await appendOps(svg, renderOps(design, face, item.values, measurer), trim.x - design.bleed, trim.y - design.bleed);
+    await appendOps(
+      svg,
+      renderOps(design, face, item.values, measurer),
+      trim.x - design.bleed,
+      trim.y - design.bleed,
+      bleedBox(design),
+    );
   }
   for (let row = 0; row < grid.rows; row += 1) {
     for (let col = 0; col < grid.cols; col += 1) {

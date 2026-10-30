@@ -14,7 +14,7 @@ import {
   type PDFImage,
   type PDFPage,
 } from "pdf-lib";
-import { faceValues, isDoubleSided, withCutCopy, type CardDef, type Design, type Deck, type DrawOp, type FaceId, type FontId, type Measurer } from "../model/types";
+import { bleedBox, faceValues, isDoubleSided, shownDesign, usesCutArt, type CardDef, type Design, type Deck, type DrawOp, type FaceId, type FontId, type Measurer } from "../model/types";
 import { cardsForSheets, expandCounts, placements, sheetCount } from "../print/impose";
 import { cardPage, cellTrim, cropMarks, gridFor, sheetLabel, type Mark, type SheetFormat } from "../print/spec";
 import { sheetCaption } from "./draw";
@@ -56,8 +56,31 @@ async function imageFor(session: Session, path: string): Promise<PDFImage | null
   return pending;
 }
 
-async function paintOps(session: Session, page: PDFPage, ops: DrawOp[], originX: number, originY: number) {
+async function paintOps(
+  session: Session,
+  page: PDFPage,
+  ops: DrawOp[],
+  originX: number,
+  originY: number,
+  clipTo?: { w: number; h: number },
+) {
   const pageH = page.getHeight();
+  if (clipTo) {
+    const x = originX * MM_TO_PT;
+    const y = pageH - (originY + clipTo.h) * MM_TO_PT;
+    const w = clipTo.w * MM_TO_PT;
+    const h = clipTo.h * MM_TO_PT;
+    page.pushOperators(
+      pushGraphicsState(),
+      moveTo(x, y),
+      lineTo(x + w, y),
+      lineTo(x + w, y + h),
+      lineTo(x, y + h),
+      closePath(),
+      clip(),
+      endPath(),
+    );
+  }
   for (const op of ops) {
     if (op.t === "rect" || op.t === "polygon" || op.t === "polyline" || op.t === "circle") {
       const fill = op.fill ? colorOf(op.fill) : undefined;
@@ -126,6 +149,7 @@ async function paintOps(session: Session, page: PDFPage, ops: DrawOp[], originX:
       page.pushOperators(popGraphicsState());
     }
   }
+  if (clipTo) page.pushOperators(popGraphicsState());
 }
 
 function paintMarks(page: PDFPage, marks: Mark[]) {
@@ -140,12 +164,6 @@ function paintMarks(page: PDFPage, marks: Mark[]) {
   }
 }
 
-function forPrint(design: Design, cut: boolean): Design {
-  if (!cut) return design;
-  const amount = design.types.reduce((max, type) => Math.max(max, type.cutBleed ?? 0), 0);
-  return amount > 0 ? withCutCopy(design, amount) : design;
-}
-
 async function addCard(session: Session, design: Design, face: FaceId, values: Record<string, string>) {
   const pageBox = cardPage(design.trim, design.bleed);
   const page = session.pdf.addPage([pageBox.w * MM_TO_PT, pageBox.h * MM_TO_PT]);
@@ -156,13 +174,9 @@ async function addCard(session: Session, design: Design, face: FaceId, values: R
     height: pageBox.h * MM_TO_PT,
     color: rgb(1, 1, 1),
   });
-  await paintOps(
-    session,
-    page,
-    renderOps(design, face, values, session.measurer),
-    pageBox.firstTrimX - design.bleed,
-    pageBox.firstTrimY - design.bleed,
-  );
+  const originX = pageBox.firstTrimX - design.bleed;
+  const originY = pageBox.firstTrimY - design.bleed;
+  await paintOps(session, page, renderOps(design, face, values, session.measurer), originX, originY, bleedBox(design));
   paintMarks(page, cropMarks(pageBox));
 }
 
@@ -175,8 +189,9 @@ async function addSheet(
   face: FaceId,
   cut = false,
 ) {
-  const shown = forPrint(design, cut);
-  const printing: Deck = cut ? { ...deck, cards: deck.cards.filter((card) => card.cut) } : deck;
+  const shown = shownDesign(design, cut);
+  const art = usesCutArt(design, cut);
+  const printing: Deck = art ? { ...deck, cards: deck.cards.filter((card) => card.cut) } : deck;
   const grid = gridFor(shown.trim, shown.bleed, sheet);
   const expanded = expandCounts(printing.cards);
   const total = sheetCount(expanded.length, grid.cols, grid.rows);
@@ -190,16 +205,12 @@ async function addSheet(
   });
   for (const item of placements(expanded.length, grid.cols, grid.rows, sheetIndex, face)) {
     const card = expanded[item.cardIndex];
-    const values = faceValues(design, printing, card, face, cut);
+    const values = faceValues(design, printing, card, face, art);
     if (!values) continue;
     const trim = cellTrim(grid, item.col, item.row);
-    await paintOps(
-      session,
-      page,
-      renderOps(shown, face, values, session.measurer),
-      trim.x - shown.bleed,
-      trim.y - shown.bleed,
-    );
+    const originX = trim.x - shown.bleed;
+    const originY = trim.y - shown.bleed;
+    await paintOps(session, page, renderOps(shown, face, values, session.measurer), originX, originY, bleedBox(shown));
   }
   paintMarks(page, cropMarks(grid));
   const label = sheetLabel(sheet.h, grid);
@@ -219,10 +230,10 @@ async function finish(session: Session): Promise<Uint8Array> {
 }
 
 export async function pdfCard(measurer: Measurer, design: Design, card: CardDef, deck: Deck, face: FaceId, cut = false) {
-  const values = faceValues(design, deck, card, face, cut);
+  const values = faceValues(design, deck, card, face, usesCutArt(design, cut));
   if (!values) throw new Error("У этой стороны нет макета");
   const session = await openSession(measurer);
-  await addCard(session, forPrint(design, cut), face, values);
+  await addCard(session, shownDesign(design, cut), face, values);
   return finish(session);
 }
 
@@ -241,15 +252,16 @@ export async function pdfSheet(
 }
 
 export async function pdfAllCards(measurer: Measurer, design: Design, deck: Deck, cut = false) {
-  const shown = forPrint(design, cut);
+  const shown = shownDesign(design, cut);
+  const art = usesCutArt(design, cut);
   const session = await openSession(measurer);
   for (const card of deck.cards) {
-    if (card.count < 1 || (cut && !card.cut)) continue;
-    const front = faceValues(design, deck, card, "front", cut);
+    if (card.count < 1 || (art && !card.cut)) continue;
+    const front = faceValues(design, deck, card, "front", art);
     if (front) await addCard(session, shown, "front", front);
     const ownBack = design.backMode === "per-card" || isDoubleSided(design, card.typeId);
     if (ownBack) {
-      const back = faceValues(design, deck, card, "back", cut);
+      const back = faceValues(design, deck, card, "back", art);
       if (back) await addCard(session, shown, "back", back);
     }
   }
@@ -257,28 +269,32 @@ export async function pdfAllCards(measurer: Measurer, design: Design, deck: Deck
     const seen = new Set<string>();
     for (const card of deck.cards) {
       if (card.count < 1 || seen.has(card.typeId) || isDoubleSided(design, card.typeId)) continue;
-      if (cut && !card.cut) continue;
+      if (art && !card.cut) continue;
       seen.add(card.typeId);
-      const back = faceValues(design, deck, card, "back", cut);
+      const back = faceValues(design, deck, card, "back", art);
       if (back) await addCard(session, shown, "back", back);
     }
   }
   return finish(session);
 }
 
-export async function pdfAllSheets(measurer: Measurer, design: Design, deck: Deck, sheet: SheetFormat) {
+export async function pdfAllSheets(measurer: Measurer, design: Design, deck: Deck, sheet: SheetFormat, cut = false) {
   const session = await openSession(measurer);
+  const typeIds = design.types.map((type) => type.id);
   const cutIds = design.types.filter((type) => (type.cutBleed ?? 0) > 0).map((type) => type.id);
   const cutSet = new Set(cutIds);
-  const plainIds = design.types.map((type) => type.id).filter((id) => !cutSet.has(id));
-  const groups = [
-    { cards: cardsForSheets(cutIds, deck.cards.filter((card) => cutSet.has(card.typeId))), cut: true },
-    { cards: cardsForSheets(plainIds, deck.cards.filter((card) => !cutSet.has(card.typeId))), cut: false },
-  ];
+  const plainIds = typeIds.filter((id) => !cutSet.has(id));
+  const art = usesCutArt(design, cut);
+  const groups = art
+    ? [
+        { cards: cardsForSheets(cutIds, deck.cards.filter((card) => cutSet.has(card.typeId))), cut: true },
+        { cards: cardsForSheets(plainIds, deck.cards.filter((card) => !cutSet.has(card.typeId))), cut: false },
+      ]
+    : [{ cards: cardsForSheets(typeIds, deck.cards), cut }];
   for (const group of groups) {
     if (group.cards.length === 0) continue;
     const packed: Deck = { ...deck, cards: group.cards };
-    const shown = forPrint(design, group.cut);
+    const shown = shownDesign(design, group.cut);
     const grid = gridFor(shown.trim, shown.bleed, sheet);
     const total = sheetCount(expandCounts(packed.cards).length, grid.cols, grid.rows);
     for (let index = 0; index < total; index += 1) {
