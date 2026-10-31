@@ -10,7 +10,7 @@ export type FieldSpec = {
 
 export type Box = { x: number; y: number; w: number; h: number };
 
-export type FontId = "serif" | "serifBold" | "sans" | "sansBold";
+export type FontId = "serif" | "serifBold" | "sans" | "sansBold" | "fraktur";
 
 export type Paint = { fill?: string; stroke?: string; sw?: number };
 
@@ -30,6 +30,8 @@ export type DrawOp =
       color: string;
       align: "left";
       rotate: number;
+      stroke?: string;
+      sw?: number;
     };
 
 export type Measurer = {
@@ -51,6 +53,8 @@ export type Recorder = {
       size: number;
       color: string;
       align?: "left" | "center" | "right";
+      stroke?: string;
+      sw?: number;
     },
   ): void;
   textBox(

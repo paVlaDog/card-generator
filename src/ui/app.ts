@@ -1,7 +1,7 @@
 import { decksFor, designs, findDeck, findDesign } from "../designs";
 import { cardsOfType, faceValues, offersPrintChoice, shownDesign, showsBack, typeCutBleed, usesCutArt, type Deck, type Design, type FaceId, type Measurer } from "../model/types";
 import { expandCounts, placements, sheetCount } from "../print/impose";
-import { gridFor, SHEETS, sheetById, type SheetFormat } from "../print/spec";
+import { gridFor, SHEETS, sheetById, sheetMargin, type SheetFormat } from "../print/spec";
 import { cardSvg, sheetSvg } from "../render/svg";
 import { installFaces, loadMeasurer } from "../render/fonts";
 import { cardFileName, pdfAllCards, pdfAllSheets, pdfCard, pdfSheet, saveFile } from "../render/pdf";
@@ -204,7 +204,8 @@ async function deckView(designId: string, deckId: string, mode: Mode): Promise<H
   const cutAmount = typeCutBleed(design, typeId);
   const useCutArt = usesCutArt(design, state.cut);
   const shown = shownDesign(design, state.cut);
-  const grid = gridFor(shown.trim, shown.bleed, sheet);
+  const margin = sheetMargin(shown.bleed);
+  const grid = gridFor(shown.trim, shown.bleed, sheet, margin);
   const expanded = expandCounts(scope.cards);
   const sheets = sheetCount(expanded.length, grid.cols, grid.rows);
   const deckSheets = design.types.reduce(
@@ -323,7 +324,7 @@ async function deckView(designId: string, deckId: string, mode: Mode): Promise<H
     if (!values) {
       stage.append(h("p", "", state.cut ? "У этой карты ещё нет копии под резку." : "У этой карты ещё нет своего оборота."));
     } else {
-      stage.append(await cardSvg(shown, state.face, values, measurer));
+      stage.append(await cardSvg(shown, state.face, values, measurer, !state.cut));
     }
     const side = state.face === "back" ? "Оборот" : "Лицо";
     const kind = useCutArt
@@ -332,9 +333,10 @@ async function deckView(designId: string, deckId: string, mode: Mode): Promise<H
         ? `под резку · вылет ${design.bleed} мм · `
         : "";
     const bleedNote = state.cut ? "" : ` Красная линия — рез, поле вокруг неё — вылет ${shown.bleed} мм.`;
-    page.append(stage, h("p", "caption", `${card.title} · ${side} · ${kind}×${card.count}.${bleedNote} В PDF вместо линии стоят метки.`));
+    const pdfNote = state.cut ? "В PDF стоят чёрные метки." : "В PDF вместо линии стоят метки.";
+    page.append(stage, h("p", "caption", `${card.title} · ${side} · ${kind}×${card.count}.${bleedNote} ${pdfNote}`));
   } else if (grid.cols === 0 || grid.rows === 0) {
-    stage.append(h("p", "", "Карта не помещается на этот лист с полем 12 мм."));
+    stage.append(h("p", "", `Карта не помещается на этот лист с полем ${margin} мм.`));
     page.append(stage);
   } else if (!sheets) {
     stage.append(h("p", "", "В колоде нет экземпляров для печати."));
@@ -344,18 +346,23 @@ async function deckView(designId: string, deckId: string, mode: Mode): Promise<H
       const values = faceValues(design, scope, expanded[item.cardIndex], state.face, useCutArt);
       return values ? [{ col: item.col, row: item.row, values }] : [];
     });
-    stage.append(await sheetSvg(shown, measurer, grid, sheet, placed, state.face, state.sheetIndex, sheets));
+    stage.append(await sheetSvg(shown, measurer, grid, sheet, placed, state.face, state.sheetIndex, sheets, !state.cut));
     const cutDetail = typeId === "hints"
       ? "У правил пергамент продолжается за край, у ликбеза вылет чёрный."
       : typeId === "roles" && state.face === "back"
         ? "Оборот продолжается пергаментом."
         : "Фото продолжается чёрным, пергамент — своей текстурой.";
     const cutNote = useCutArt
-      ? ` Карты под резку: ${cutAmount} мм до красной рамки и ещё ${cutAmount} мм снаружи. ${cutDetail}`
+      ? `Карты под резку: ${cutAmount} мм до реза и ещё ${cutAmount} мм снаружи. ${cutDetail}`
       : state.cut
-        ? ` Вылет ${design.bleed} мм за линией реза.`
+        ? `Вылет ${design.bleed} мм за линией реза.`
         : "";
-    page.append(stage, h("p", "caption", `Красная рамка только на экране и показывает рез.${cutNote} В PDF остаются чёрные метки в поле листа. Пустые ячейки держат ту же сетку.`));
+    const marksNote = shown.bleed > 0
+      ? "В PDF остаются чёрные метки в поле листа."
+      : "В PDF меток реза нет, от края листа остаётся несколько миллиметров.";
+    const frameNote = state.cut ? "" : "Красная рамка только на экране и показывает рез.";
+    const sheetCaptionText = [frameNote, cutNote, marksNote, "Пустые ячейки держат ту же сетку."].filter(Boolean).join(" ");
+    page.append(stage, h("p", "caption", sheetCaptionText));
   }
   if (state.error) page.append(h("p", "status", state.error));
   return page;

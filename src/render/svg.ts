@@ -6,8 +6,8 @@ import { renderOps, sheetCaption } from "./draw";
 const SVG_NS = "http://www.w3.org/2000/svg";
 let clipSeq = 0;
 
-const FAMILY = { serif: "PT Serif", serifBold: "PT Serif", sans: "PT Sans", sansBold: "PT Sans" };
-const WEIGHT = { serif: "400", serifBold: "700", sans: "400", sansBold: "700" };
+const FAMILY = { serif: "PT Serif", serifBold: "PT Serif", sans: "PT Sans", sansBold: "PT Sans", fraktur: "UnifrakturMaguntia" };
+const WEIGHT = { serif: "400", serifBold: "700", sans: "400", sansBold: "700", fraktur: "400" };
 
 function el<K extends keyof SVGElementTagNameMap>(name: K): SVGElementTagNameMap[K] {
   return document.createElementNS(SVG_NS, name);
@@ -108,6 +108,15 @@ export async function appendOps(
       node.setAttribute("font-family", FAMILY[op.font]);
       node.setAttribute("font-weight", WEIGHT[op.font]);
       node.setAttribute("font-size", String((op.size * 25.4) / 72));
+      if (op.font === "fraktur") {
+        node.setAttribute("font-feature-settings", '"liga" 0, "clig" 0, "dlig" 0, "hlig" 0, "rlig" 0');
+      }
+      if (op.stroke) {
+        node.setAttribute("stroke", op.stroke);
+        node.setAttribute("stroke-width", String(op.sw ?? 0.35));
+        node.setAttribute("paint-order", "stroke fill");
+        node.setAttribute("stroke-linejoin", "round");
+      }
       if (op.rotate) node.setAttribute("transform", `rotate(${op.rotate} ${op.x} ${op.y})`);
       group.append(node);
     } else if (op.t === "image") {
@@ -155,13 +164,14 @@ export async function cardSvg(
   face: FaceId,
   values: Record<string, string>,
   measurer: Measurer,
+  showGuide = true,
 ): Promise<SVGSVGElement> {
   const box = bleedBox(design);
   const svg = blank(box.w, box.h);
   svg.setAttribute("overflow", "hidden");
   svg.setAttribute("aria-label", "Карта с вылетом");
   await appendOps(svg, renderOps(design, face, values, measurer), 0, 0, box);
-  guide(svg, design.bleed, design.bleed, design.trim.w, design.trim.h);
+  if (showGuide) guide(svg, design.bleed, design.bleed, design.trim.w, design.trim.h);
   return svg;
 }
 
@@ -174,6 +184,7 @@ export async function sheetSvg(
   face: FaceId,
   index: number,
   total: number,
+  showGuide = true,
 ): Promise<SVGSVGElement> {
   const svg = blank(sheet.w, sheet.h);
   svg.setAttribute("aria-label", `Лист ${index + 1}`);
@@ -192,13 +203,15 @@ export async function sheetSvg(
       bleedBox(design),
     );
   }
-  for (let row = 0; row < grid.rows; row += 1) {
-    for (let col = 0; col < grid.cols; col += 1) {
-      const trim = cellTrim(grid, col, row);
-      guide(svg, trim.x, trim.y, design.trim.w, design.trim.h);
+  if (showGuide) {
+    for (let row = 0; row < grid.rows; row += 1) {
+      for (let col = 0; col < grid.cols; col += 1) {
+        const trim = cellTrim(grid, col, row);
+        guide(svg, trim.x, trim.y, design.trim.w, design.trim.h);
+      }
     }
   }
-  for (const mark of cropMarks(grid)) {
+  if (grid.bleed > 0) for (const mark of cropMarks(grid)) {
     const line = el("line");
     line.setAttribute("x1", String(mark.x1));
     line.setAttribute("y1", String(mark.y1));

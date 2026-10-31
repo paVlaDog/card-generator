@@ -7,6 +7,8 @@ type TextOpts = {
   size: number;
   color: string;
   align?: "left" | "center" | "right";
+  stroke?: string;
+  sw?: number;
 };
 
 type M = [number, number, number, number, number, number];
@@ -112,6 +114,8 @@ export function createRecorder(measurer: Measurer): Recorder {
       color: opts.color,
       align: "left",
       rotate: rotationOf(matrix),
+      stroke: opts.stroke,
+      sw: opts.sw,
     });
   }
 

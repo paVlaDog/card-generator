@@ -11,8 +11,14 @@ export const SHEETS: SheetFormat[] = [
   { id: "a4", title: "A4", w: 210, h: 297 },
 ];
 
-/** Minimum distance from the sheet edge to the first trim line. */
+/** Minimum distance from the sheet edge to the first trim line, leaving room for crop marks. */
 export const TRIM_MARGIN = 12;
+/** Ordinary sheets have no crop marks, so the block can sit a few millimetres from the edge. */
+export const PLAIN_MARGIN = 2;
+
+export function sheetMargin(bleed: number): number {
+  return bleed > 0 ? TRIM_MARGIN : PLAIN_MARGIN;
+}
 export const MARK_GAP = 3;
 export const MARK_LEN = 5;
 

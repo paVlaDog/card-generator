@@ -4,19 +4,31 @@ import {
   closePath,
   degrees,
   endPath,
+  fill as fillPath,
+  fillAndStroke,
+  LineCapStyle,
+  LineJoinStyle,
   lineTo,
   moveTo,
   PDFDocument,
   popGraphicsState,
   pushGraphicsState,
   rgb,
+  setFillingRgbColor,
+  setLineCap,
+  setLineJoin,
+  setLineWidth,
+  setStrokingRgbColor,
+  setTextRenderingMode,
+  stroke as strokePath,
+  TextRenderingMode,
   type PDFFont,
   type PDFImage,
   type PDFPage,
 } from "pdf-lib";
 import { bleedBox, faceValues, isDoubleSided, shownDesign, usesCutArt, type CardDef, type Design, type Deck, type DrawOp, type FaceId, type FontId, type Measurer } from "../model/types";
 import { cardsForSheets, expandCounts, placements, sheetCount } from "../print/impose";
-import { cardPage, cellTrim, cropMarks, gridFor, sheetLabel, type Mark, type SheetFormat } from "../print/spec";
+import { cardPage, cellTrim, cropMarks, gridFor, sheetLabel, sheetMargin, type Mark, type SheetFormat } from "../print/spec";
 import { sheetCaption } from "./draw";
 import { renderOps } from "./draw";
 import { embedFonts } from "./fonts";
@@ -105,18 +117,38 @@ async function paintOps(
           borderColor: stroke,
           borderWidth: sw,
         });
-      } else {
-        const d =
-          op.points
-            .map((point, index) => {
-              const x = (originX + point[0]) * MM_TO_PT;
-              const y = pageH - (originY + point[1]) * MM_TO_PT;
-              return `${index === 0 ? "M" : "L"}${x.toFixed(3)},${y.toFixed(3)}`;
-            })
-            .join(" ") + (op.t === "polygon" ? " Z" : "");
-        page.drawSvgPath(d, { x: 0, y: 0, color: fill, borderColor: stroke, borderWidth: sw });
+      } else if (op.points.length > 0) {
+        const commands = [
+          pushGraphicsState(),
+          setLineCap(LineCapStyle.Round),
+          setLineJoin(LineJoinStyle.Round),
+        ];
+        if (fill) commands.push(setFillingRgbColor(fill.red, fill.green, fill.blue));
+        if (stroke && sw) commands.push(setStrokingRgbColor(stroke.red, stroke.green, stroke.blue), setLineWidth(sw));
+        op.points.forEach((point, index) => {
+          const x = (originX + point[0]) * MM_TO_PT;
+          const y = pageH - (originY + point[1]) * MM_TO_PT;
+          commands.push(index === 0 ? moveTo(x, y) : lineTo(x, y));
+        });
+        if (op.t === "polygon") commands.push(closePath());
+        if (fill && stroke) commands.push(fillAndStroke());
+        else if (fill) commands.push(fillPath());
+        else if (stroke) commands.push(strokePath());
+        commands.push(popGraphicsState());
+        page.pushOperators(...commands);
       }
     } else if (op.t === "text") {
+      if (op.stroke) {
+        const stroke = colorOf(op.stroke);
+        page.pushOperators(
+          pushGraphicsState(),
+          setStrokingRgbColor(stroke.red, stroke.green, stroke.blue),
+          setLineWidth((op.sw ?? 0.35) * MM_TO_PT),
+          setLineJoin(LineJoinStyle.Round),
+          setLineCap(LineCapStyle.Round),
+          setTextRenderingMode(TextRenderingMode.FillAndOutline),
+        );
+      }
       page.drawText(op.text, {
         x: (originX + op.x) * MM_TO_PT,
         y: pageH - (originY + op.y) * MM_TO_PT,
@@ -125,6 +157,7 @@ async function paintOps(
         color: colorOf(op.color),
         rotate: op.rotate ? degrees(-op.rotate) : undefined,
       });
+      if (op.stroke) page.pushOperators(popGraphicsState());
     } else if (op.t === "image") {
       const image = await imageFor(session, op.path);
       if (!image) continue;
@@ -192,7 +225,7 @@ async function addSheet(
   const shown = shownDesign(design, cut);
   const art = usesCutArt(design, cut);
   const printing: Deck = art ? { ...deck, cards: deck.cards.filter((card) => card.cut) } : deck;
-  const grid = gridFor(shown.trim, shown.bleed, sheet);
+  const grid = gridFor(shown.trim, shown.bleed, sheet, sheetMargin(shown.bleed));
   const expanded = expandCounts(printing.cards);
   const total = sheetCount(expanded.length, grid.cols, grid.rows);
   const page = session.pdf.addPage([sheet.w * MM_TO_PT, sheet.h * MM_TO_PT]);
@@ -212,7 +245,7 @@ async function addSheet(
     const originY = trim.y - shown.bleed;
     await paintOps(session, page, renderOps(shown, face, values, session.measurer), originX, originY, bleedBox(shown));
   }
-  paintMarks(page, cropMarks(grid));
+  if (shown.bleed > 0) paintMarks(page, cropMarks(grid));
   const label = sheetLabel(sheet.h, grid);
   if (label && total > 0) {
     page.drawText(sheetCaption(face, sheet.title, sheetIndex, total), {
@@ -295,7 +328,7 @@ export async function pdfAllSheets(measurer: Measurer, design: Design, deck: Dec
     if (group.cards.length === 0) continue;
     const packed: Deck = { ...deck, cards: group.cards };
     const shown = shownDesign(design, group.cut);
-    const grid = gridFor(shown.trim, shown.bleed, sheet);
+    const grid = gridFor(shown.trim, shown.bleed, sheet, sheetMargin(shown.bleed));
     const total = sheetCount(expandCounts(packed.cards).length, grid.cols, grid.rows);
     for (let index = 0; index < total; index += 1) {
       await addSheet(session, design, packed, sheet, index, "front", group.cut);

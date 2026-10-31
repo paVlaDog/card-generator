@@ -3,6 +3,7 @@ import { MAIN_TYPE, type Design, type Recorder } from "../../model/types";
 const GROUND = "#12080c";
 const SILVER = "#d5dbe4";
 const BLOOD = "#8e1c28";
+const BLOOD_BRIGHT = "#b11f2c";
 const BONE = "#efeae2";
 const JAW = "#e4ddd2";
 const INK = "#14080c";
@@ -125,9 +126,8 @@ function skull(pen: Recorder, cx: number, cy: number, scale = 1) {
   }
 }
 
-function ornament(pen: Recorder) {
+function ornament(pen: Recorder, top = BLEED + 33.5, ends = false) {
   const left = BLEED + 4.6;
-  const top = BLEED + 33.5;
   const scale = 54 / 360;
   const at = (x: number, y: number): Pt => [left + x * scale, top + y * scale];
   const paths = [
@@ -140,9 +140,22 @@ function ornament(pen: Recorder) {
   skull(pen, at(122, 38)[0], at(122, 38)[1]);
   skull(pen, at(238, 38)[0], at(238, 38)[1]);
   skull(pen, at(180, 35.4)[0], at(180, 35.4)[1], 1.08);
+  if (!ends) return;
+  for (const x of [4, 356]) {
+    const [cx, cy] = at(x, 64);
+    pen.polygon(
+      [
+        [cx, cy - 0.7],
+        [cx + 0.7, cy],
+        [cx, cy + 0.7],
+        [cx - 0.7, cy],
+      ],
+      { fill: SILVER },
+    );
+  }
 }
 
-function frame(pen: Recorder) {
+function frame(pen: Recorder, withDiamonds = true) {
   const width = TRIM_W + BLEED * 2;
   const height = TRIM_H + BLEED * 2;
   pen.rect({ x: 0, y: 0, w: width, h: height }, { fill: GROUND });
@@ -156,7 +169,7 @@ function frame(pen: Recorder) {
   stroke(pen, trace("M380 58 C358 58 350 36 328 34 C316 32 312 48 326 52 C338 56 336 40 324 38").map(([x, y]) => mm(x, y)));
   const [dotX, dotY] = mm(315, 46);
   pen.circle(dotX, dotY, 0.23, { fill: BLOOD });
-  diamonds(pen);
+  if (withDiamonds) diamonds(pen);
 }
 
 function kindColor(kind: string): string {
@@ -203,14 +216,18 @@ function drawFront(pen: Recorder, values: Record<string, string>) {
 }
 
 function drawBack(pen: Recorder, values: Record<string, string>) {
-  frame(pen);
-  pen.text(values.label || "", {
+  frame(pen, false);
+  ornament(pen, BLEED + 16.8, true);
+  ornament(pen, BLEED + 53.2, true);
+  pen.text(values.label || "Halloween", {
     x: BLEED + TRIM_W / 2,
-    y: BLEED + TRIM_H / 2 + 1.2,
-    font: "serif",
-    size: 11,
-    color: SILVER,
+    y: BLEED + 46.2,
+    font: "fraktur",
+    size: (11.4 * 72) / 25.4,
+    color: BLOOD_BRIGHT,
     align: "center",
+    stroke: SILVER,
+    sw: 0.42,
   });
 }
 

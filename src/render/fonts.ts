@@ -8,6 +8,15 @@ const FILES: Record<FontId, string> = {
   serifBold: "fonts/PTSerif-Bold.ttf",
   sans: "fonts/PTSans-Regular.ttf",
   sansBold: "fonts/PTSans-Bold.ttf",
+  fraktur: "fonts/UnifrakturMaguntia-Book.ttf",
+};
+
+const FACE: Record<FontId, { family: string; weight: number }> = {
+  serif: { family: "PT Serif", weight: 400 },
+  serifBold: { family: "PT Serif", weight: 700 },
+  sans: { family: "PT Sans", weight: 400 },
+  sansBold: { family: "PT Sans", weight: 700 },
+  fraktur: { family: "UnifrakturMaguntia", weight: 400 },
 };
 
 const cache = new Map<FontId, Promise<ArrayBuffer>>();
@@ -28,7 +37,8 @@ async function embedAll(pdf: PDFDocument): Promise<Record<FontId, PDFFont>> {
   pdf.registerFontkit(fontkit);
   const fonts = {} as Record<FontId, PDFFont>;
   for (const id of Object.keys(FILES) as FontId[]) {
-    fonts[id] = await pdf.embedFont(await loadBytes(id));
+    const features = id === "fraktur" ? { liga: false, rlig: false, clig: false, dlig: false, hlig: false } : undefined;
+    fonts[id] = await pdf.embedFont(await loadBytes(id), { features });
   }
   return fonts;
 }
@@ -51,9 +61,8 @@ export async function embedFonts(pdf: PDFDocument): Promise<Record<FontId, PDFFo
 export async function installFaces(): Promise<void> {
   const css = (Object.keys(FILES) as FontId[])
     .map((id) => {
-      const family = id.startsWith("serif") ? "PT Serif" : "PT Sans";
-      const weight = id.endsWith("Bold") ? 700 : 400;
-      return `@font-face{font-family:"${family}";src:url("${assetUrl(FILES[id])}") format("truetype");font-weight:${weight};font-style:normal;font-display:block;}`;
+      const face = FACE[id];
+      return `@font-face{font-family:"${face.family}";src:url("${assetUrl(FILES[id])}") format("truetype");font-weight:${face.weight};font-style:normal;font-display:block;}`;
     })
     .join("");
   const style = document.createElement("style");
@@ -64,6 +73,7 @@ export async function installFaces(): Promise<void> {
     document.fonts.load('700 16px "PT Serif"'),
     document.fonts.load('16px "PT Sans"'),
     document.fonts.load('700 16px "PT Sans"'),
+    document.fonts.load('16px "UnifrakturMaguntia"'),
   ]);
   await document.fonts.ready;
 }
